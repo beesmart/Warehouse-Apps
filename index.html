@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Carton, Pallet & Container Planner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+
+<div id="root"></div>
+
+<!-- React + ReactDOM from CDN -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+
+<!-- Babel for JSX -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+// Simple SVG grid to visualise one layer of cartons on a pallet or in a container
+function LayerGrid({
+  title,
+  spaceL,
+  spaceW,
+  boxL,
+  boxW,
+  countL,
+  countW,
+  usedL,
+  usedW,
+}) {
+  const SVG_W = 520;
+  const SVG_H = 320;
+  const scale = Math.min(SVG_W / spaceL, SVG_H / spaceW);
+  const pad = 6;
+  const outerW = spaceL * scale;
+  const outerH = spaceW * scale;
+
+  return (
+    <div className="p-4 border rounded-2xl shadow-sm bg-white">
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="font-semibold">{title}</h4>
+        <div className="text-sm text-gray-600">{countL} × {countW} cartons / layer</div>
+      </div>
+      <svg width={SVG_W + pad * 2} height={SVG_H + pad * 2} className="bg-gray-50 rounded-xl">
+        {/* Footprint */}
+        <g transform={`translate(${pad + (SVG_W - outerW) / 2}, ${pad + (SVG_H - outerH) / 2})`}>
+          <rect x={0} y={0} width={outerW} height={outerH} fill="none" stroke="#9ca3af" strokeDasharray="6 6" />
+          {/* Used area */}
+          <rect x={0} y={0} width={usedL * scale} height={usedW * scale} fill="#e5e7eb" />
+
+          {/* Cartons */}
+          {Array.from({ length: countL }).map((_, i) =>
+            Array.from({ length: countW }).map((_, j) => {
+              const x = i * boxL * scale;
+              const y = j * boxW * scale;
+              return (
+                <rect
+                  key={`${i}-${j}`}
+                  x={x + 1}
+                  y={y + 1}
+                  width={boxL * scale - 2}
+                  height={boxW * scale - 2}
+                  fill="#ffffff"
+                  stroke="#111827"
+                  strokeWidth={0.8}
+                  rx={4}
+                />
+              );
+            })
+          )}
+        </g>
+      </svg>
+      <div className="grid grid-cols-3 gap-2 text-sm mt-2">
+        <div><span className="text-gray-500">Footprint:</span> {spaceL} × {spaceW} mm</div>
+        <div><span className="text-gray-500">Used:</span> {usedL} × {usedW} mm</div>
+        <div><span className="text-gray-500">Void:</span> {(spaceL - usedL)} × {(spaceW - usedW)} mm</div>
+      </div>
+    </div>
+  );
+}
+
+function bestTile(boxL, boxW, spaceL, spaceW) {
+  // Try both orientations and choose the one with most cartons per layer
+  const fit = (bl, bw) => ({
+    countL: Math.floor(spaceL / bl),
+    countW: Math.floor(spaceW / bw),
+    perLayer: Math.floor(spaceL / bl) * Math.floor(spaceW / bw),
+    boxL: bl,
+    boxW: bw,
+    usedL: Math.floor(spaceL / bl) * bl,
+    usedW: Math.floor(spaceW / bw) * bw,
+  });
+  const o1 = fit(boxL, boxW);
+  const o2 = fit(boxW, boxL);
+  if (o2.perLayer > o1.perLayer) return { ...o2, rotated: true };
+  return { ...o1, rotated: false };
+}
+
+function CartonPlanner() {
+  const [product, setProduct] = useState({ l: 100, w: 150, h: 250, weight: 1 }); // mm & kg
+  const [carton, setCarton] = useState({ l: 300, w: 250, h: 450 }); // mm
+  const [limits, setLimits] = useState({
+    palletL: 1200, // mm (CHEP 1200×1000)
+    palletW: 1000,
+    palletH: 1350, // usable stack height (mm)
+    palletWeightMax: 12000, // guesstimate kg; not strictly used
+    containerL: 12030, // 40'HQ internal (mm)
+    containerW: 2350,
+    containerH: 2690,
+    cartonGrossMax: 12, // kg
+  });
+
+  // Units per carton from exact integer packing inside the carton
+  const unitsPerCarton = useMemo(() => (
+    Math.max(0,
+      Math.floor(carton.l / product.l) *
+      Math.floor(carton.w / product.w) *
+      Math.floor(carton.h / product.h)
+    )
+  ), [carton, product]);
+
+  const cartonWeight = unitsPerCarton * product.weight;
+  const overweight = cartonWeight > limits.cartonGrossMax;
+
+  // Pallet tiling (choose best 90° orientation)
+  const palletTile = useMemo(() => bestTile(carton.l, carton.w, limits.palletL, limits.palletW), [carton, limits]);
+  const palletLayers = Math.floor(limits.palletH / carton.h);
+  const cartonsPerPallet = palletTile.perLayer * palletLayers;
+  const unitsPerPallet = cartonsPerPallet * unitsPerCarton;
+
+  // Container tiling (floor load)
+  const containerTile = useMemo(() => bestTile(carton.l, carton.w, limits.containerL, limits.containerW), [carton, limits]);
+  const containerLayers = Math.floor(limits.containerH / carton.h);
+  const cartonsPerContainer = containerTile.perLayer * containerLayers;
+  const unitsPerContainer = cartonsPerContainer * unitsPerCarton;
+
+  const numberFmt = (n) => n.toLocaleString();
+
+  return (
+    <div className="p-6 space-y-6">
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Carton, Pallet & Container Planner</h1>
+        <div className="text-sm text-gray-600">All dimensions in <b>mm</b> and weights in <b>kg</b>.</div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Inputs */}
+        <div className="lg:col-span-1 space-y-4">
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h3 className="font-semibold mb-2">Product</h3>
+            {([
+              ["l", "Length"],
+              ["w", "Width"],
+              ["h", "Height"],
+              ["weight", "Weight (kg)"]
+            ]).map(([k, label]) => (
+              <label key={k} className="block text-sm my-1">
+                {label}
+                <input
+                  type="number"
+                  value={product[k]}
+                  onChange={(e) => setProduct({ ...product, [k]: +e.target.value })}
+                  className="border rounded-lg px-2 py-1 ml-2 w-28"
+                />
+              </label>
+            ))}
+          </section>
+
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h3 className="font-semibold mb-2">Carton (external)</h3>
+            {([
+              ["l", "Length"],
+              ["w", "Width"],
+              ["h", "Height"],
+            ]).map(([k, label]) => (
+              <label key={k} className="block text-sm my-1">
+                {label}
+                <input
+                  type="number"
+                  value={carton[k]}
+                  onChange={(e) => setCarton({ ...carton, [k]: +e.target.value })}
+                  className="border rounded-lg px-2 py-1 ml-2 w-28"
+                />
+              </label>
+            ))}
+            <div className={`mt-2 text-sm ${overweight ? "text-red-600" : "text-gray-600"}`}>
+              {unitsPerCarton} units / carton · {cartonWeight.toFixed(2)} kg gross
+              {overweight && (
+                <span> — exceeds limit {limits.cartonGrossMax} kg</span>
+              )}
+            </div>
+          </section>
+
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h3 className="font-semibold mb-2">Pallet (CHEP)</h3>
+            {([
+              ["palletL", "Length"],
+              ["palletW", "Width"],
+              ["palletH", "Usable height"],
+            ]).map(([k, label]) => (
+              <label key={k} className="block text-sm my-1">
+                {label}
+                <input
+                  type="number"
+                  value={limits[k]}
+                  onChange={(e) => setLimits({ ...limits, [k]: +e.target.value })}
+                  className="border rounded-lg px-2 py-1 ml-2 w-32"
+                />
+              </label>
+            ))}
+          </section>
+
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h3 className="font-semibold mb-2">40' HQ Container (internal)</h3>
+            {([
+              ["containerL", "Length"],
+              ["containerW", "Width"],
+              ["containerH", "Height"],
+              ["cartonGrossMax", "Max carton gross (kg)"],
+            ]).map(([k, label]) => (
+              <label key={k} className="block text-sm my-1">
+                {label}
+                <input
+                  type="number"
+                  value={limits[k]}
+                  onChange={(e) => setLimits({ ...limits, [k]: +e.target.value })}
+                  className="border rounded-lg px-2 py-1 ml-2 w-40"
+                />
+              </label>
+            ))}
+          </section>
+        </div>
+
+        {/* Visuals + KPIs */}
+        <div className="lg:col-span-2 space-y-4">
+          <section className="grid md:grid-cols-2 gap-4">
+            <LayerGrid
+              title={`Pallet layer ${palletTile.rotated ? "(carton rotated 90°)" : ""}`}
+              spaceL={limits.palletL}
+              spaceW={limits.palletW}
+              boxL={palletTile.boxL}
+              boxW={palletTile.boxW}
+              countL={palletTile.countL}
+              countW={palletTile.countW}
+              usedL={palletTile.usedL}
+              usedW={palletTile.usedW}
+            />
+            <LayerGrid
+              title={`Container layer ${containerTile.rotated ? "(carton rotated 90°)" : ""}`}
+              spaceL={limits.containerL}
+              spaceW={limits.containerW}
+              boxL={containerTile.boxL}
+              boxW={containerTile.boxW}
+              countL={containerTile.countL}
+              countW={containerTile.countW}
+              usedL={containerTile.usedL}
+              usedW={containerTile.usedW}
+            />
+          </section>
+
+          <section className="grid md:grid-cols-3 gap-4">
+            <div className="p-4 border rounded-2xl shadow-sm bg-white">
+              <h4 className="font-semibold mb-1">Carton</h4>
+              <div className="text-sm text-gray-600 mb-2">{carton.l}×{carton.w}×{carton.h} mm</div>
+              <div className="text-xl font-bold">{unitsPerCarton} units</div>
+              <div className={`text-sm ${overweight ? "text-red-600" : "text-gray-600"}`}>
+                {cartonWeight.toFixed(2)} kg gross {overweight && "(over limit)"}
+              </div>
+            </div>
+
+            <div className="p-4 border rounded-2xl shadow-sm bg-white">
+              <h4 className="font-semibold mb-1">Per Pallet</h4>
+              <div className="text-sm text-gray-600 mb-2">{palletLayers} layers</div>
+              <div className="text-xl font-bold">{numberFmt(cartonsPerPallet)} cartons</div>
+              <div className="text-sm text-gray-600">{numberFmt(unitsPerPallet)} units</div>
+            </div>
+
+            <div className="p-4 border rounded-2xl shadow-sm bg-white">
+              <h4 className="font-semibold mb-1">Per 40' HQ</h4>
+              <div className="text-sm text-gray-600 mb-2">{containerLayers} layers</div>
+              <div className="text-xl font-bold">{numberFmt(cartonsPerContainer)} cartons</div>
+              <div className="text-sm text-gray-600">{numberFmt(unitsPerContainer)} units</div>
+            </div>
+          </section>
+
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h4 className="font-semibold mb-2">Notes & Tips</h4>
+            <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+              <li>This tool chooses the better of two orientations per layer automatically (0° / 90°).</li>
+              <li>All math uses integer tiling (no gaps between cartons). Add corner protection/void as needed to your carton dimensions.</li>
+              <li>Set <em>Usable height</em> to exclude pallet height if your 150 cm limit includes the pallet itself.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Mount it
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(CartonPlanner));
+</script>
+</body>
+</html>
