@@ -9,29 +9,29 @@
 </head>
 <body class="bg-gray-100">
   <div id="root"></div>
-
-  <!-- React + Babel -->
+  
+  <!-- React + ReactDOM from CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Global namespace -->
+  
+  <!-- Create a global namespace for our app -->
   <script>
     window.CartonApp = {};
   </script>
+  
+    <!-- Load core scripts (order matters!) -->
+    <script src="js/constants.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/algorithms.js"></script>
+    <script src="js/three-utils.js"></script>
 
-  <!-- Core JS (no JSX → no Babel) -->
-  <script src="./js/constants.js"></script>
-  <script src="./js/utils.js"></script>
-  <script src="./js/algorithms.js"></script>
-  <script src="./js/three-utils.js"></script>
+    <!-- Components -->
+    <script src="js/components/UIComponents.js" type="text/babel"></script>
+    <script src="js/components/LayerGrid2D.js" type="text/babel"></script>
+    <script src="js/components/PalletView3D.js" type="text/babel"></script>
 
-  <!-- Components (React.createElement style → no JSX needed unless explicitly used) -->
-  <script src="./js/components/UIComponents.js"></script>
-  <script src="./js/components/LayerGrid2D.js"></script>
-  <script src="./js/components/PalletView3D.js"></script>
-
-  <!-- Main app (may contain JSX or Babel-transformed logic) -->
-  <script type="text/babel" src="./js/App.js"></script>
+    <!-- Main app -->
+    <script src="js/App.js" type="text/babel"></script>
 </body>
 </html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Carton, Pallet Planner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- SpriteText for 3D labels -->
+
+<script src="https://cdn.jsdelivr.net/npm/three-spritetext@1.9.1/build/three-spritetext.min.js"></script>
+<script>
+// Ensure SpriteText exists globally
+if (typeof window.SpriteText === "undefined" && typeof SpriteText !== "undefined") {
+  window.SpriteText = SpriteText;
+} else if (typeof window.SpriteText === "undefined" && typeof THREE !== "undefined" && THREE.SpriteText) {
+  window.SpriteText = THREE.SpriteText;
+} else if (typeof window.SpriteText === "undefined") {
+  console.error("SpriteText failed to load — check CDN connectivity.");
+}
+</script>
+</head>
+<body class="bg-gray-100">
+
+<div id="root"></div>
+
+<!-- React + ReactDOM -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+<!-- Babel for JSX -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useMemo, useRef, useEffect } = React;
+
+/* =====================================================
+   3D PALLET VIEW WITH DIMENSION LABELS
+===================================================== */
+function PalletView3D({ palletL, palletW, palletH, cartonL, cartonW, cartonH, pattern, perLayer, layers, patternRows, palletTile, cartonWeight }) {
+  const mountRef = useRef(null);
+  const sceneRef = useRef(null);
+  const rendererRef = useRef(null);
+  const frameRef = useRef(null);
+  const [viewMode, setViewMode] = useState('3D');
+
+  // Basic metrics
+  const palletSurfaceArea = palletL * palletW;
+  const palletVolume = palletL * palletW * palletH;
+  const usedSurfaceArea = (palletTile.usedL || 0) * (palletTile.usedW || 0);
+  const surfaceUsage = palletSurfaceArea > 0 ? (usedSurfaceArea / palletSurfaceArea) * 100 : 0;
+  const cartonsVolume = perLayer * layers * cartonL * cartonW * cartonH;
+  const volumeUsage = palletVolume > 0 ? (cartonsVolume / palletVolume) * 100 : 0;
+
+  useEffect(() => {
+    if (!mountRef.current || viewMode !== '3D') return;
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf5f5f5);
+    sceneRef.current = scene;
+
+    const width = mountRef.current.clientWidth;
+    const height = 400;
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
+    camera.position.set(2500, 2000, 2500);
+    camera.lookAt(0, 0, 0);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    mountRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    directionalLight.position.set(1000, 2000, 1000);
+    scene.add(directionalLight);
+
+    // Floor
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(5000, 5000),
+      new THREE.MeshLambertMaterial({ color: 0xe0e0e0 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Pallet base
+    const palletBase = new THREE.Mesh(
+      new THREE.BoxGeometry(palletL, 100, palletW),
+      new THREE.MeshLambertMaterial({ color: 0x8b7355 })
+    );
+    palletBase.position.y = 50;
+    palletBase.castShadow = true;
+    palletBase.receiveShadow = true;
+    scene.add(palletBase);
+
+    // Cartons
+    const cartonGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const standardMaterial = new THREE.MeshLambertMaterial({ color: 0x4a9eff });
+    const rotatedMaterial = new THREE.MeshLambertMaterial({ color: 0x60a5fa });
+    const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x1e40af });
+    const cartonEdges = new THREE.EdgesGeometry(cartonGeometry);
+
+    for (let layer = 0; layer < layers; layer++) {
+      const yOffset = 100 + layer * cartonH + cartonH / 2;
+
+      if (patternRows && pattern === "mixed") {
+        let zStart = -palletW / 2;
+        patternRows.forEach((row) => {
+          const { rotated, countL, boxL, boxW } = row;
+          const rowUsedL = countL * boxL;
+          const xStart = -rowUsedL / 2;
+
+          for (let i = 0; i < countL; i++) {
+            const xPos = xStart + boxL / 2 + i * boxL;
+            const zPos = zStart + boxW / 2;
+
+            const carton = new THREE.Mesh(cartonGeometry, rotated ? rotatedMaterial : standardMaterial);
+            const edges = new THREE.LineSegments(cartonEdges, edgeMaterial);
+            carton.scale.set(boxL, cartonH, boxW);
+            edges.scale.set(boxL, cartonH, boxW);
+            carton.position.set(xPos, yOffset, zPos);
+            edges.position.set(xPos, yOffset, zPos);
+            scene.add(carton);
+            scene.add(edges);
+
+            // === Add Label (SpriteText) ===
+            const labelText = `${Math.round(boxL)}×${Math.round(boxW)}×${Math.round(cartonH)}`;
+            const label = new window.SpriteText(labelText, 28, '#111');
+            label.backgroundColor = 'rgba(255,255,255,0.8)';
+            label.padding = 3;
+            label.position.set(xPos, yOffset + cartonH / 2 + 40, zPos);
+            scene.add(label);
+          }
+          zStart += boxW;
+        });
+      } else {
+        const isRotated = pattern === "rotated";
+        const boxL = isRotated ? cartonW : cartonL;
+        const boxW = isRotated ? cartonL : cartonW;
+        const countL = Math.floor(palletL / boxL);
+        const countW = Math.floor(palletW / boxW);
+        const usedL = countL * boxL;
+        const usedW = countW * boxW;
+        const xStart = -usedL / 2;
+        const zStart = -usedW / 2;
+
+        for (let i = 0; i < countL; i++) {
+          for (let j = 0; j < countW; j++) {
+            const xPos = xStart + boxL / 2 + i * boxL;
+            const zPos = zStart + boxW / 2 + j * boxW;
+
+            const carton = new THREE.Mesh(cartonGeometry, standardMaterial);
+            const edges = new THREE.LineSegments(cartonEdges, edgeMaterial);
+            carton.scale.set(boxL, cartonH, boxW);
+            edges.scale.set(boxL, cartonH, boxW);
+            carton.position.set(xPos, yOffset, zPos);
+            edges.position.set(xPos, yOffset, zPos);
+            scene.add(carton);
+            scene.add(edges);
+
+            // === Add Label (SpriteText) ===
+            const labelText = `${Math.round(boxL)}×${Math.round(boxW)}×${Math.round(cartonH)}`;
+            const label = new SpriteText(labelText, 28, '#111');
+            label.backgroundColor = 'rgba(255,255,255,0.8)';
+            label.padding = 3;
+            label.position.set(xPos, yOffset + cartonH / 2 + 40, zPos);
+            scene.add(label);
+          }
+        }
+      }
+    }
+
+    // Mouse rotation
+    let rotationX = Math.PI / 4, rotationY = 0.3, isDragging = false;
+    let prevX = 0, prevY = 0;
+
+    const handleMouseDown = e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; };
+    const handleMouseUp = () => isDragging = false;
+    const handleMouseMove = e => {
+      if (!isDragging) return;
+      const dx = e.clientX - prevX;
+      const dy = e.clientY - prevY;
+      rotationX += dx * 0.01;
+      rotationY = Math.max(0.1, Math.min(1.2, rotationY - dy * 0.005));
+      prevX = e.clientX; prevY = e.clientY;
+    };
+
+    mountRef.current.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mousemove", handleMouseMove);
+
+    // Animation
+    const animate = () => {
+      frameRef.current = requestAnimationFrame(animate);
+      const radius = 3000;
+      const height = 800 + rotationY * 1500;
+      camera.position.x = Math.sin(rotationX) * radius;
+      camera.position.y = height;
+      camera.position.z = Math.cos(rotationX) * radius;
+      camera.lookAt(0, palletH / 2, 0);
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(frameRef.current);
+      mountRef.current.removeChild(renderer.domElement);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [palletL, palletW, palletH, cartonL, cartonW, cartonH, pattern, perLayer, layers, patternRows, viewMode]);
+
+  return (
+    <div className="p-4 border rounded-2xl shadow-sm bg-white">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="font-semibold">Pallet Visualization</h4>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setViewMode("2D")}
+            className={`px-3 py-1 text-sm rounded-lg ${viewMode === "2D" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
+          >2D</button>
+          <button
+            onClick={() => setViewMode("3D")}
+            className={`px-3 py-1 text-sm rounded-lg ${viewMode === "3D" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
+          >3D</button>
+        </div>
+      </div>
+      <div ref={mountRef} className="bg-gray-50 rounded-xl overflow-hidden" style={{ height: "400px" }} />
+    </div>
+  );
+}
+
+/* =====================================================
+   SIMPLE APP
+===================================================== */
+function CartonPlanner() {
+  const [carton, setCarton] = useState({ l: 600, w: 400, h: 500 });
+  const [limits, setLimits] = useState({ palletL: 1200, palletW: 1000, palletH: 1000 });
+
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold">Carton, Pallet Planner</h1>
+      <PalletView3D
+        palletL={limits.palletL}
+        palletW={limits.palletW}
+        palletH={limits.palletH}
+        cartonL={carton.l}
+        cartonW={carton.w}
+        cartonH={carton.h}
+        pattern="standard"
+        perLayer={5}
+        layers={2}
+        patternRows={null}
+        palletTile={{ usedL: 1200, usedW: 1000 }}
+        cartonWeight={24}
+      />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<CartonPlanner />);
+</script>
+</body>
+</html>

@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Carton, Pallet & Container Planner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body class="bg-gray-100">
+
+<div id="root"></div>
+
+<!-- React + ReactDOM from CDN -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+<!-- Babel for JSX -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useMemo, useRef, useEffect } = React;
+
+/* =====================================================
+   3D PALLET VIEW - THREE.JS
+===================================================== */
+function PalletView3D({ palletL, palletW, palletH, cartonL, cartonW, cartonH, pattern, perLayer, layers, patternRows, palletTile, cartonWeight }) {
+  const mountRef = useRef(null);
+  const sceneRef = useRef(null);
+  const rendererRef = useRef(null);
+  const frameRef = useRef(null);
+  const [viewMode, setViewMode] = useState('3D');
+
+  // Calculate surface and volume usage
+  const palletSurfaceArea = palletL * palletW;
+  const palletVolume = palletL * palletW * palletH;
+  
+  // Surface usage calculation
+  const usedSurfaceArea = (palletTile.usedL || 0) * (palletTile.usedW || 0);
+  const surfaceUsage = palletSurfaceArea > 0 ? (usedSurfaceArea / palletSurfaceArea) * 100 : 0;
+  
+  // Volume usage calculation
+  const cartonsVolume = perLayer * layers * cartonL * cartonW * cartonH;
+  const volumeUsage = palletVolume > 0 ? (cartonsVolume / palletVolume) * 100 : 0;
+  useEffect(() => {
+    if (!mountRef.current || viewMode !== '3D') return;
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf5f5f5);
+    sceneRef.current = scene;
+
+    // Camera
+    const width = mountRef.current.clientWidth;
+    const height = 400;
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
+    camera.position.set(2500, 2000, 2500);
+    camera.lookAt(0, 0, 0);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    mountRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+    directionalLight.position.set(1000, 2000, 1000);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.camera.near = 0.1;
+    directionalLight.shadow.camera.far = 5000;
+    directionalLight.shadow.camera.left = -2000;
+    directionalLight.shadow.camera.right = 2000;
+    directionalLight.shadow.camera.top = 2000;
+    directionalLight.shadow.camera.bottom = -2000;
+    scene.add(directionalLight);
+
+    // Ground plane
+    const groundGeometry = new THREE.PlaneGeometry(5000, 5000);
+    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0xe0e0e0 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -10;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Pallet base
+    const palletBaseGeometry = new THREE.BoxGeometry(palletL, 100, palletW);
+    const palletBaseMaterial = new THREE.MeshLambertMaterial({ color: 0x8b7355 });
+    const palletBase = new THREE.Mesh(palletBaseGeometry, palletBaseMaterial);
+    palletBase.position.y = 50;
+    palletBase.castShadow = true;
+    palletBase.receiveShadow = true;
+    scene.add(palletBase);
+
+    // Add cartons based on pattern
+    const cartonGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const standardMaterial = new THREE.MeshLambertMaterial({ color: 0x4a9eff });
+    const rotatedMaterial = new THREE.MeshLambertMaterial({ color: 0x60a5fa });
+    const cartonEdges = new THREE.EdgesGeometry(cartonGeometry);
+    const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x1e40af, linewidth: 1 });
+
+    // Create cartons for each layer
+    for (let layer = 0; layer < layers; layer++) {
+      const yOffset = 100 + layer * cartonH + cartonH / 2;
+
+      if (patternRows && pattern === "mixed") {
+        // Mixed pattern - properly calculate starting position
+        let zStart = -palletW / 2;
+        
+        patternRows.forEach((row) => {
+          const { rotated, countL, boxL, boxW } = row;
+          const rowUsedL = countL * boxL;
+          const xStart = -rowUsedL / 2; // Center the row on the pallet
+          
+          for (let i = 0; i < countL; i++) {
+            const carton = new THREE.Mesh(cartonGeometry, rotated ? rotatedMaterial : standardMaterial);
+            const edges = new THREE.LineSegments(cartonEdges, edgeMaterial);
+            
+            const xPos = xStart + boxL / 2 + i * boxL;
+            const zPos = zStart + boxW / 2;
+            
+            carton.scale.set(boxL, cartonH, boxW);
+            edges.scale.set(boxL, cartonH, boxW);
+            
+            carton.position.set(xPos, yOffset, zPos);
+            edges.position.set(xPos, yOffset, zPos);
+            
+            carton.castShadow = true;
+            carton.receiveShadow = true;
+            
+            scene.add(carton);
+            scene.add(edges);
+          }
+          
+          zStart += boxW; // Move to next row
+        });
+      } else {
+        // Uniform pattern
+        const boxL = pattern === 'rotated' ? cartonW : cartonL;
+        const boxW = pattern === 'rotated' ? cartonL : cartonW;
+        const countL = Math.floor(palletL / boxL);
+        const countW = Math.floor(palletW / boxW);
+        
+        const usedL = countL * boxL;
+        const usedW = countW * boxW;
+        const xStart = -usedL / 2;
+        const zStart = -usedW / 2;
+
+        for (let i = 0; i < countL; i++) {
+          for (let j = 0; j < countW; j++) {
+            const carton = new THREE.Mesh(cartonGeometry, standardMaterial);
+            const edges = new THREE.LineSegments(cartonEdges, edgeMaterial);
+            
+            carton.scale.set(boxL, cartonH, boxW);
+            edges.scale.set(boxL, cartonH, boxW);
+            
+            const xPos = xStart + boxL / 2 + i * boxL;
+            const zPos = zStart + boxW / 2 + j * boxW;
+            
+            carton.position.set(xPos, yOffset, zPos);
+            edges.position.set(xPos, yOffset, zPos);
+            
+            carton.castShadow = true;
+            carton.receiveShadow = true;
+            
+            scene.add(carton);
+            scene.add(edges);
+          }
+        }
+      }
+    }
+
+    // Animation loop with click-and-drag rotation
+    let isDragging = false;
+    let previousMouseX = 0;
+    let previousMouseY = 0;
+    let rotationX = Math.PI / 4; // Initial angle
+    let rotationY = 0.3; // Initial height angle
+    
+    const handleMouseDown = (event) => {
+      isDragging = true;
+      previousMouseX = event.clientX;
+      previousMouseY = event.clientY;
+      mountRef.current.style.cursor = 'grabbing';
+    };
+    
+    const handleMouseMove = (event) => {
+      if (!isDragging) return;
+      
+      const deltaX = event.clientX - previousMouseX;
+      const deltaY = event.clientY - previousMouseY;
+      
+      rotationX += deltaX * 0.01;
+      rotationY = Math.max(0.1, Math.min(1.2, rotationY - deltaY * 0.005));
+      
+      previousMouseX = event.clientX;
+      previousMouseY = event.clientY;
+    };
+    
+    const handleMouseUp = () => {
+      isDragging = false;
+      mountRef.current.style.cursor = 'grab';
+    };
+    
+    const handleMouseLeave = () => {
+      isDragging = false;
+      mountRef.current.style.cursor = 'grab';
+    };
+    
+    // Touch events for mobile
+    const handleTouchStart = (event) => {
+      isDragging = true;
+      const touch = event.touches[0];
+      previousMouseX = touch.clientX;
+      previousMouseY = touch.clientY;
+    };
+    
+    const handleTouchMove = (event) => {
+      if (!isDragging) return;
+      event.preventDefault();
+      
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - previousMouseX;
+      const deltaY = touch.clientY - previousMouseY;
+      
+      rotationX += deltaX * 0.01;
+      rotationY = Math.max(0.1, Math.min(1.2, rotationY - deltaY * 0.005));
+      
+      previousMouseX = touch.clientX;
+      previousMouseY = touch.clientY;
+    };
+    
+    const handleTouchEnd = () => {
+      isDragging = false;
+    };
+
+    mountRef.current.addEventListener('mousedown', handleMouseDown);
+    mountRef.current.addEventListener('mousemove', handleMouseMove);
+    mountRef.current.addEventListener('mouseup', handleMouseUp);
+    mountRef.current.addEventListener('mouseleave', handleMouseLeave);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleMouseMove);
+    
+    mountRef.current.addEventListener('touchstart', handleTouchStart);
+    mountRef.current.addEventListener('touchmove', handleTouchMove);
+    mountRef.current.addEventListener('touchend', handleTouchEnd);
+    
+    mountRef.current.style.cursor = 'grab';
+
+    const animate = () => {
+      frameRef.current = requestAnimationFrame(animate);
+      
+      // Update camera position based on rotation values
+      const radius = 3000;
+      const height = 800 + rotationY * 1500;
+      
+      camera.position.x = Math.sin(rotationX) * radius;
+      camera.position.y = height;
+      camera.position.z = Math.cos(rotationX) * radius;
+      camera.lookAt(0, palletH / 2, 0);
+      
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Handle resize
+    const handleResize = () => {
+      if (!mountRef.current) return;
+      const width = mountRef.current.clientWidth;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => {
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
+      if (mountRef.current && rendererRef.current) {
+        mountRef.current.removeChild(rendererRef.current.domElement);
+        mountRef.current.removeEventListener('mousedown', handleMouseDown);
+        mountRef.current.removeEventListener('mousemove', handleMouseMove);
+        mountRef.current.removeEventListener('mouseup', handleMouseUp);
+        mountRef.current.removeEventListener('mouseleave', handleMouseLeave);
+        mountRef.current.removeEventListener('touchstart', handleTouchStart);
+        mountRef.current.removeEventListener('touchmove', handleTouchMove);
+        mountRef.current.removeEventListener('touchend', handleTouchEnd);
+      }
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('resize', handleResize);
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+      }
+    };
+  }, [palletL, palletW, palletH, cartonL, cartonW, cartonH, pattern, perLayer, layers, patternRows, viewMode]);
+
+  return (
+    <div className="p-4 border rounded-2xl shadow-sm bg-white">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="font-semibold">Pallet Visualization</h4>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setViewMode('2D')}
+            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+              viewMode === '2D' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
+            2D
+          </button>
+          <button
+            onClick={() => setViewMode('3D')}
+            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+              viewMode === '3D' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
+            3D
+          </button>
+        </div>
+      </div>
+      {viewMode === '3D' ? (
+        <>
+          <div ref={mountRef} className="bg-gray-50 rounded-xl overflow-hidden" style={{ height: '400px' }} />
+          <div className="text-xs text-gray-500 mt-2 text-center">Click and drag to rotate view • Scroll to zoom (if supported)</div>
+        </>
+      ) : (
+        <LayerGrid2D
+          spaceL={palletL}
+          spaceW={palletW}
+          boxL={pattern === 'rotated' ? cartonW : cartonL}
+          boxW={pattern === 'rotated' ? cartonL : cartonW}
+          countL={Math.floor(palletL / (pattern === 'rotated' ? cartonW : cartonL))}
+          countW={Math.floor(palletW / (pattern === 'rotated' ? cartonL : cartonW))}
+          usedL={Math.floor(palletL / (pattern === 'rotated' ? cartonW : cartonL)) * (pattern === 'rotated' ? cartonW : cartonL)}
+          usedW={Math.floor(palletW / (pattern === 'rotated' ? cartonL : cartonW)) * (pattern === 'rotated' ? cartonL : cartonW)}
+          patternRows={patternRows}
+        />
+      )}
+      <div className="grid grid-cols-2 gap-2 text-sm mt-2">
+        <div className="grid grid-cols-2 gap-2">
+          <div><span className="text-gray-500">Layers:</span> {layers}</div>
+          <div><span className="text-gray-500">Cartons/layer:</span> {perLayer}</div>
+          <div><span className="text-gray-500">Total cartons:</span> {perLayer * layers}</div>
+          <div><span className="text-gray-500">Total weight:</span> {(perLayer * layers * cartonWeight).toFixed(1)} kg</div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><span className="text-gray-500">Surface usage:</span> {surfaceUsage.toFixed(1)}%</div>
+          <div><span className="text-gray-500">Volume usage:</span> {volumeUsage.toFixed(1)}%</div>
+          <div><span className="text-gray-500">Stack height:</span> {layers * cartonH} mm</div>
+          <div><span className="text-gray-500">Height unused:</span> {palletH - (layers * cartonH)} mm</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================
+   2D LAYER GRID 
+===================================================== */
+function LayerGrid2D({ spaceL, spaceW, boxL, boxW, countL, countW, usedL, usedW, patternRows }) {
+  const SVG_W = 520;
+  const SVG_H = 320;
+  const scale = Math.min(SVG_W / spaceL, SVG_H / spaceW);
+  const pad = 6;
+  const outerW = spaceL * scale;
+  const outerH = spaceW * scale;
+  
+  let yOffset = 0;
+
+  return (
+    <svg width={SVG_W + pad * 2} height={SVG_H + pad * 2} className="bg-gray-50 rounded-xl">
+      <g transform={`translate(${pad + (SVG_W - outerW) / 2}, ${pad + (SVG_H - outerH) / 2})`}>
+        <rect x={0} y={0} width={outerW} height={outerH} fill="none" stroke="#9ca3af" strokeDasharray="6 6" />
+        
+        {patternRows
+          ? patternRows.map((row, rowIndex) => {
+              const { rotated, countL, boxL, boxW } = row;
+              const y = yOffset * scale;
+              yOffset += boxW;
+              return Array.from({ length: countL }).map((_, i) => (
+                <rect
+                  key={`${rowIndex}-${i}`}
+                  x={i * boxL * scale + 1}
+                  y={y + 1}
+                  width={boxL * scale - 2}
+                  height={boxW * scale - 2}
+                  fill={rotated ? "#fef3c7" : "#ffffff"}
+                  stroke="#111827"
+                  strokeWidth={0.8}
+                  rx={4}
+                />
+              ));
+            })
+          : Array.from({ length: countL }).map((_, i) =>
+              Array.from({ length: countW }).map((_, j) => {
+                const x = i * boxL * scale;
+                const y = j * boxW * scale;
+                return (
+                  <rect
+                    key={`${i}-${j}`}
+                    x={x + 1}
+                    y={y + 1}
+                    width={boxL * scale - 2}
+                    height={boxW * scale - 2}
+                    fill="#ffffff"
+                    stroke="#111827"
+                    strokeWidth={0.8}
+                    rx={4}
+                  />
+                );
+              })
+            )}
+      </g>
+    </svg>
+  );
+}
+
+/* =====================================================
+   LAYER GRID — DRAW SVG WITH OPTIONAL MIXED ROW PATTERN
+===================================================== */
+function LayerGrid({ title, spaceL, spaceW, boxL, boxW, countL, countW, usedL, usedW, patternRows }) {
+  const SVG_W = 520;
+  const SVG_H = 320;
+  const scale = Math.min(SVG_W / spaceL, SVG_H / spaceW);
+  const pad = 6;
+  const outerW = spaceL * scale;
+  const outerH = spaceW * scale;
+
+  let yOffset = 0;
+
+  return (
+    <div className="p-4 border rounded-2xl shadow-sm bg-white">
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="font-semibold">{title}</h4>
+      </div>
+
+      <svg width={SVG_W + pad * 2} height={SVG_H + pad * 2} className="bg-gray-50 rounded-xl">
+        <g transform={`translate(${pad + (SVG_W - outerW) / 2}, ${pad + (SVG_H - outerH) / 2})`}>
+          <rect x={0} y={0} width={outerW} height={outerH} fill="none" stroke="#9ca3af" strokeDasharray="6 6" />
+
+          {patternRows
+            ? patternRows.map((row, rowIndex) => {
+                const { rotated, countL, boxL, boxW } = row;
+                const y = yOffset * scale;
+                yOffset += boxW;
+                return Array.from({ length: countL }).map((_, i) => (
+                  <rect
+                    key={`${rowIndex}-${i}`}
+                    x={i * boxL * scale + 1}
+                    y={y + 1}
+                    width={boxL * scale - 2}
+                    height={boxW * scale - 2}
+                    fill={rotated ? "#fef3c7" : "#ffffff"} /* pale yellow rotated rows */
+                    stroke="#111827"
+                    strokeWidth={0.8}
+                    rx={4}
+                  />
+                ));
+              })
+            : Array.from({ length: countL }).map((_, i) =>
+                Array.from({ length: countW }).map((_, j) => {
+                  const x = i * boxL * scale;
+                  const y = j * boxW * scale;
+                  return (
+                    <rect
+                      key={`${i}-${j}`}
+                      x={x + 1}
+                      y={y + 1}
+                      width={boxL * scale - 2}
+                      height={boxW * scale - 2}
+                      fill="#ffffff"
+                      stroke="#111827"
+                      strokeWidth={0.8}
+                      rx={4}
+                    />
+                  );
+                })
+              )}
+        </g>
+      </svg>
+
+      <div className="grid grid-cols-3 gap-2 text-sm mt-2">
+        <div><span className="text-gray-500">Footprint:</span> {spaceL} × {spaceW} mm</div>
+        <div><span className="text-gray-500">Used:</span> {usedL} × {usedW} mm</div>
+        <div><span className="text-gray-500">Efficiency:</span> {((usedL * usedW) / (spaceL * spaceW) * 100).toFixed(1)}%</div>
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================
+   BEST TILE CALCULATOR — SUPPORTS MIXED ORIENTATION
+===================================================== */
+function bestTile(boxL, boxW, boxH, spaceL, spaceW, spaceH) {
+  // Guard inputs
+  const validNumber = n => typeof n === "number" && isFinite(n) && n > 0;
+  if (![boxL, boxW, boxH, spaceL, spaceW, spaceH].every(validNumber)) {
+    return { countL:0,countW:0,layers:0,perLayer:0,total:0,boxL,boxW,boxH,usedL:0,usedW:0,usedH:0,pattern:"none" };
+  }
+
+  const orientations = [
+    { L: boxL, W: boxW, H: boxH, label: "upright" },
+    { L: boxW, W: boxL, H: boxH, label: "upright-rotated" },
+    { L: boxH, W: boxW, H: boxL, label: "laid-side-L" },
+    { L: boxL, W: boxH, H: boxW, label: "laid-side-W" },
+  ];
+
+  const candidates = [];
+
+  // --- helper: uniform pattern ---
+  function uniform(L, W, H, label) {
+    const countL = Math.floor(spaceL / L);
+    const countW = Math.floor(spaceW / W);
+    const layers = Math.floor(spaceH / H);
+    if (countL <= 0 || countW <= 0 || layers <= 0) return null;
+
+    const perLayer = countL * countW;
+    return {
+      pattern: label,
+      countL, countW, layers, perLayer,
+      total: perLayer * layers,
+      boxL: L, boxW: W, boxH: H,
+      usedL: countL * L, usedW: countW * W, usedH: layers * H,
+      patternRows: null,
+      voidArea: spaceL * spaceW - countL * L * countW * W
+    };
+  }
+
+  // --- helper: mixed alternating rows ---
+  function mixed(L, W, H) {
+    if (L === W) return null;
+    const layers = Math.floor(spaceH / H);
+    if (layers <= 0) return null;
+
+    const rows = [];
+    let yUsed = 0;
+    let usedL = 0;
+    let totalInLayer = 0;
+    let remaining = spaceW;
+    let rowIndex = 0;
+
+    while (remaining >= Math.min(L, W)) {
+      const rotated = rowIndex % 2 === 1;
+      const rowL = rotated ? W : L;
+      const rowW = rotated ? L : W;
+      if (remaining < rowW) break;
+      const cols = Math.floor(spaceL / rowL);
+      if (cols <= 0) break;
+
+      rows.push({ rotated, countL: cols, boxL: rowL, boxW: rowW });
+      totalInLayer += cols;
+      usedL = Math.max(usedL, cols * rowL);
+      yUsed += rowW;
+      remaining -= rowW;
+      rowIndex++;
+    }
+
+    if (!rows.length) return null;
+
+    const perLayer = totalInLayer;
+    const total = perLayer * layers;
+    return {
+      pattern: "mixed",
+      patternRows: rows,
+      layers,
+      perLayer,
+      total,
+      boxL: L, boxW: W, boxH: H,
+      usedL, usedW: yUsed, usedH: layers * H,
+      voidArea: spaceL * spaceW - usedL * yUsed
+    };
+  }
+
+  // test all orientations
+  for (const o of orientations) {
+    const u = uniform(o.L, o.W, o.H, o.label);
+    if (u) candidates.push(u);
+
+    // only test mixed for base-upright orientation (where height = boxH)
+    if (o.H === boxH) {
+      const m = mixed(o.L, o.W, o.H);
+      if (m) candidates.push(m);
+    }
+  }
+
+  if (!candidates.length)
+    return { countL:0,countW:0,layers:0,perLayer:0,total:0,boxL,boxW,boxH,usedL:0,usedW:0,usedH:0,pattern:"none" };
+
+  // choose best by total → perLayer → least void
+  candidates.sort((a,b)=>b.total - a.total || b.perLayer - a.perLayer || a.voidArea - b.voidArea);
+
+  const best = candidates[0];
+
+  // enforce sanity (no NaNs)
+  ["usedL","usedW","usedH","perLayer","total","layers"].forEach(k=>{
+    if (!isFinite(best[k])) best[k] = 0;
+  });
+
+  return best;
+}
+
+
+
+/* =====================================================
+   MAIN APP
+===================================================== */
+function CartonPlanner() {
+  const [product, setProduct] = useState({ l: 100, w: 150, h: 250, weight: 1 });
+  const [carton, setCarton] = useState({ l: 300, w: 250, h: 450 });
+  const [limits, setLimits] = useState({
+    palletL: 1200,
+    palletW: 1000,
+    palletH: 1350,
+    // containerL: 12030,
+    // containerW: 2350,
+    // containerH: 2690,
+    cartonGrossMax: 12,
+  });
+
+  // Calculate units per carton with validation
+  const unitsPerCarton = useMemo(() => {
+    if (product.l <= 0 || product.w <= 0 || product.h <= 0 || 
+        carton.l <= 0 || carton.w <= 0 || carton.h <= 0) {
+      return 0;
+    }
+    return Math.floor(carton.l / product.l) *
+           Math.floor(carton.w / product.w) *
+           Math.floor(carton.h / product.h);
+  }, [carton, product]);
+
+  const cartonWeight = unitsPerCarton * product.weight;
+  const overweight = cartonWeight > limits.cartonGrossMax;
+
+const palletTile = useMemo(
+  () => bestTile(carton.l, carton.w, carton.h, limits.palletL, limits.palletW, limits.palletH),
+  [carton, limits]
+);
+const palletLayers = palletTile.layers;   // <-- use oriented layers
+  const cartonsPerPallet = palletTile.perLayer * palletLayers;
+  const unitsPerPallet = cartonsPerPallet * unitsPerCarton;
+  const palletWeight = cartonsPerPallet * cartonWeight;
+
+  // const containerTile = useMemo(() => bestTile(carton.l, carton.w, limits.containerL, limits.containerW), [carton, limits]);
+  // const containerLayers = carton.h > 0 ? Math.floor(limits.containerH / carton.h) : 0;
+  // const cartonsPerContainer = containerTile.perLayer * containerLayers;
+  // const unitsPerContainer = cartonsPerContainer * unitsPerCarton;
+  // const containerWeight = cartonsPerContainer * cartonWeight;
+
+  const numberFmt = (n) => n.toLocaleString();
+
+  // Input handler with validation
+  const handleNumberInput = (setter, obj, key, value) => {
+    const num = parseFloat(value);
+    if (!isNaN(num) && num >= 0) {
+      setter({ ...obj, [key]: num });
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Carton, Pallet Planner</h1>
+        <div className="text-sm text-gray-600">All dimensions in <b>mm</b> and weights in <b>kg</b>.</div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Inputs */}
+        <div className="lg:col-span-1 space-y-4">
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h3 className="font-semibold mb-2">Product</h3>
+            {[
+              ["l", "Length"],
+              ["w", "Width"],
+              ["h", "Height"],
+              ["weight", "Weight (kg)"],
+            ].map(([k, label]) => (
+              <label key={k} className="block text-sm my-1">
+                {label}
+                <input
+                  type="number"
+                  min="0"
+                  step={k === "weight" ? "0.01" : "1"}
+                  value={product[k]}
+                  onChange={(e) => handleNumberInput(setProduct, product, k, e.target.value)}
+                  className="border rounded-lg px-2 py-1 ml-2 w-28"
+                />
+              </label>
+            ))}
+          </section>
+
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h3 className="font-semibold mb-2">Carton (external)</h3>
+            {[
+              ["l", "Length"],
+              ["w", "Width"],
+              ["h", "Height"],
+            ].map(([k, label]) => (
+              <label key={k} className="block text-sm my-1">
+                {label}
+                <input
+                  type="number"
+                  min="0"
+                  value={carton[k]}
+                  onChange={(e) => handleNumberInput(setCarton, carton, k, e.target.value)}
+                  className="border rounded-lg px-2 py-1 ml-2 w-28"
+                />
+              </label>
+            ))}
+            <div className={`mt-2 text-sm ${overweight ? "text-red-600 font-semibold" : "text-gray-600"}`}>
+              {unitsPerCarton} units / carton · {cartonWeight.toFixed(2)} kg gross
+              {overweight && <span> — exceeds {limits.cartonGrossMax} kg limit!</span>}
+            </div>
+          </section>
+
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h3 className="font-semibold mb-2">Pallet (CHEP)</h3>
+            {[
+              ["palletL", "Length"],
+              ["palletW", "Width"],
+              ["palletH", "Usable height"],
+            ].map(([k, label]) => (
+              <label key={k} className="block text-sm my-1">
+                {label}
+                <input
+                  type="number"
+                  min="0"
+                  value={limits[k]}
+                  onChange={(e) => handleNumberInput(setLimits, limits, k, e.target.value)}
+                  className="border rounded-lg px-2 py-1 ml-2 w-32"
+                />
+              </label>
+            ))}
+            <div className="mt-2 text-sm text-gray-600">
+              Total weight: {palletWeight.toFixed(2)} kg
+            </div>
+          </section>
+        </div>
+
+        {/* Visuals + KPIs */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* 3D Pallet View */}
+          <PalletView3D
+            palletL={limits.palletL}
+            palletW={limits.palletW}
+            palletH={limits.palletH}
+            cartonL={palletTile.boxL}   // <-- oriented
+            cartonW={palletTile.boxW}
+            cartonH={palletTile.boxH}
+            pattern={palletTile.pattern}
+            perLayer={palletTile.perLayer}
+            layers={palletLayers}
+            palletTile={palletTile}
+            cartonWeight={cartonWeight}
+          />
+
+          <section className="grid md:grid-cols-3 gap-4">
+            <div className="p-4 border rounded-2xl shadow-sm bg-white">
+              <h4 className="font-semibold mb-1">Carton</h4>
+              <div className="text-sm text-gray-600 mb-2">{carton.l}×{carton.w}×{carton.h} mm</div>
+              <div className="text-xl font-bold">{unitsPerCarton} units</div>
+              <div className={`text-sm ${overweight ? "text-red-600 font-semibold" : "text-gray-600"}`}>
+                {cartonWeight.toFixed(2)} kg gross {overweight && "(OVER LIMIT)"}
+              </div>
+            </div>
+
+            <div className="p-4 border rounded-2xl shadow-sm bg-white">
+              <h4 className="font-semibold mb-1">Per Pallet</h4>
+              <div className="text-sm text-gray-600 mb-2">
+                {palletTile.perLayer} cartons/layer × {palletLayers} layers
+              </div>
+              <div className="text-xl font-bold">{numberFmt(cartonsPerPallet)} cartons</div>
+              <div className="text-sm text-gray-600">{numberFmt(unitsPerPallet)} units</div>
+              <div className="text-sm text-gray-500 mt-1">{palletWeight.toFixed(1)} kg total</div>
+            </div>
+          </section>
+
+          <section className="p-4 border rounded-2xl shadow-sm bg-white">
+            <h4 className="font-semibold mb-2">Optimization Details</h4>
+            <div className="grid md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <h5 className="font-medium text-gray-700 mb-1">Pallet Configuration</h5>
+                <ul className="text-gray-600 space-y-0.5">
+                  <li>• Pattern: {palletTile.pattern}</li>
+                  <li>• Cartons per layer: {palletTile.perLayer}</li>
+                  <li>• Space efficiency: {((palletTile.usedL * palletTile.usedW) / (limits.palletL * limits.palletW) * 100).toFixed(1)}%</li>
+                  <li>• Vertical layers: {palletLayers}</li>
+                  <li>• Stack height: {palletLayers * palletTile.boxH} mm</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section className="p-4 border rounded-2xl shadow-sm bg-yellow-50">
+            <h4 className="font-semibold mb-2">Notes & Tips</h4>
+            <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+              <li>3D view shows actual carton stacking on pallet - move mouse to rotate view</li>
+              <li>Toggle between 2D and 3D views using the buttons above the visualization</li>
+              <li>Automatically tests standard (0°), rotated (90°), and mixed (alternating) orientations</li>
+              <li>Yellow boxes in 2D view indicate rotated cartons (90° rotation)</li>
+              <li>All calculations use integer tiling (floor function). Add padding/protection as needed</li>
+              <li>Weight limits are critical for shipping - red warnings indicate exceeded limits</li>
+              <li>Container weights shown in tonnes for easier shipping documentation</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Mount app
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(CartonPlanner));
+</script>
+</body>
+</html>
