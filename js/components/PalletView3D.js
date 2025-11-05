@@ -7,7 +7,6 @@ window.CartonApp.Constants = window.CartonApp.Constants || {};
 window.CartonApp.Utils = window.CartonApp.Utils || {};
 
 const LayerGrid2D = window.CartonApp.Components.LayerGrid2D;
-// const DIMENSION_COLORS = window.CartonApp.Constants.DIMENSION_COLORS;
 
 // ----------------------------------------------------
 // Helper: Create 3D Scene
@@ -96,10 +95,39 @@ function addHeightGuide(scene, palletL, palletW, palletH) {
 // ----------------------------------------------------
 // Helper: Add dimension arrows (L, W, H)
 // ----------------------------------------------------
-function addDimensionArrows(scene, palletL, palletW, palletH) {
+function addDimensionArrows(scene, palletL, palletW, palletH, pattern) {
+  const DIMENSION_COLORS = window.CartonApp.Constants.DIMENSION_COLORS;
+  const { getVisibleLabels } = window.CartonApp.Utils;
+
+  // Origin corner
   const origin = new THREE.Vector3(-palletL / 2, 50, -palletW / 2);
   const arrowLength = Math.max(palletL, palletW, palletH) * 0.5;
   const arrowHead = 100;
+
+  // Determine which world axes correspond to L/W/H for this pattern
+  let axisFor = { L: new THREE.Vector3(1, 0, 0), W: new THREE.Vector3(0, 0, 1), H: new THREE.Vector3(0, 1, 0) };
+
+  switch (pattern) {
+    case "upright-rotated":
+      axisFor = { L: new THREE.Vector3(0, 0, 1), W: new THREE.Vector3(1, 0, 0), H: new THREE.Vector3(0, 1, 0) };
+      break;
+    case "laid-side-l":
+      // box laid on side → height becomes W
+      axisFor = { L: new THREE.Vector3(1, 0, 0), W: new THREE.Vector3(0, 1, 0), H: new THREE.Vector3(0, 0, 1) };
+      break;
+    case "laid-side-w":
+      // height becomes L
+      axisFor = { L: new THREE.Vector3(0, 1, 0), W: new THREE.Vector3(0, 0, 1), H: new THREE.Vector3(1, 0, 0) };
+      break;
+    case "laid-h-l":
+      // height becomes W (flat orientation)
+      axisFor = { L: new THREE.Vector3(1, 0, 0), W: new THREE.Vector3(0, 0, 1), H: new THREE.Vector3(0, 1, 0) };
+      break;
+    case "laid-h-w":
+      // height becomes L (flat orientation)
+      axisFor = { L: new THREE.Vector3(0, 0, 1), W: new THREE.Vector3(1, 0, 0), H: new THREE.Vector3(0, 1, 0) };
+      break;
+  }
 
   const addArrow = (dir, color, label) => {
     const arrow = new THREE.ArrowHelper(
@@ -132,10 +160,12 @@ function addDimensionArrows(scene, palletL, palletW, palletH) {
     scene.add(sprite);
   };
 
-  addArrow(new THREE.Vector3(1, 0, 0), DIMENSION_COLORS.L, "L");
-  addArrow(new THREE.Vector3(0, 0, 1), DIMENSION_COLORS.W, "W");
-  addArrow(new THREE.Vector3(0, 1, 0), DIMENSION_COLORS.H, "H");
+  addArrow(axisFor.L, DIMENSION_COLORS.L, "L");
+  addArrow(axisFor.W, DIMENSION_COLORS.W, "W");
+  addArrow(axisFor.H, DIMENSION_COLORS.H, "H");
 }
+
+
 
 // ----------------------------------------------------
 // PalletView3D Component
@@ -198,10 +228,14 @@ window.CartonApp.Components.PalletView3D = function ({
     });
     resizeObserver.observe(mount);
 
-    // Pallet + guide
-    addPalletBase(scene, palletL, palletW);
-    addHeightGuide(scene, palletL, palletW, palletH);
-    addDimensionArrows(scene, palletL, palletW, palletH);
+    // --- If algorithm swapped pallet orientation, flip L↔W in visuals too
+    const drawL = palletTile.palletSwapped ? palletW : palletL;
+    const drawW = palletTile.palletSwapped ? palletL : palletW;
+
+    // Pallet base + height guide + dimension arrows
+    addPalletBase(scene, drawL, drawW);
+    addHeightGuide(scene, drawL, drawW, palletH);
+    // addDimensionArrows(scene, drawL, drawW, palletH);
 
     // Materials
     const standardMaterial = new THREE.MeshLambertMaterial({ color: 0x4a9eff });
@@ -217,11 +251,12 @@ window.CartonApp.Components.PalletView3D = function ({
     for (let layer = 0; layer < layers; layer++) {
       const yOffset = 100 + layer * cartonH + cartonH / 2;
       if (patternRows) {
-        let zStart = -palletW / 2;
+        let zStart = -drawW / 2;
         patternRows.forEach((row) => {
           const { rotated, countL, boxL: rowBoxL, boxW: rowBoxW } = row;
           const rowUsedL = countL * rowBoxL;
           const xStart = -rowUsedL / 2;
+          
           for (let i = 0; i < countL; i++) {
             const carton = new THREE.Mesh(
               cartonGeometry,
@@ -242,8 +277,8 @@ window.CartonApp.Components.PalletView3D = function ({
           zStart += rowBoxW;
         });
       } else {
-        const countL = Math.floor(palletL / cartonL);
-        const countW = Math.floor(palletW / cartonW);
+        const countL = Math.floor(drawL / cartonL);
+        const countW = Math.floor(drawW / cartonW);
         const usedL = countL * cartonL;
         const usedW = countW * cartonW;
         const xStart = -usedL / 2;
@@ -281,17 +316,17 @@ window.CartonApp.Components.PalletView3D = function ({
       mountRef.current.style.cursor = "grabbing";
     };
     const onMove = (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - prevX;
-      const dy = e.clientY - prevY;
-      rotX += dx * 0.01;
-      rotY = Math.max(0.1, Math.min(1.2, rotY - dy * 0.005));
-      prevX = e.clientX;
-      prevY = e.clientY;
+    if (!isDragging || !mountRef.current) return;
+    const dx = e.clientX - prevX;
+    const dy = e.clientY - prevY;
+    rotX += dx * 0.01;
+    rotY = Math.max(0.1, Math.min(1.2, rotY - dy * 0.005));
+    prevX = e.clientX;
+    prevY = e.clientY;
     };
     const onUp = () => {
-      isDragging = false;
-      mountRef.current.style.cursor = "grab";
+    isDragging = false;
+    if (mountRef.current) mountRef.current.style.cursor = "grab";
     };
 
     mountRef.current.addEventListener("mousedown", onDown);

@@ -57,38 +57,53 @@ window.CartonApp.Components.PalletSizeSelector = function({ limits, setLimits })
   const { PALLET_SIZES } = window.CartonApp.Constants;
   const { handleNumberInput } = window.CartonApp.Utils;
   
-  return React.createElement('section', {
-    className: 'p-4 border rounded-2xl shadow-sm bg-white'
-  },
-    React.createElement('h3', { className: 'font-semibold mb-2' }, 'Pallet (CHEP)'),
+  return React.createElement(
+    'section',
+    { className: 'p-4 border rounded-2xl shadow-sm bg-white' },
     
+    React.createElement('h3', { className: 'font-semibold mb-2' }, 'Pallet (CHEP)'),
+
     // Preset dropdown
-    React.createElement('label', { className: 'block text-sm my-1' },
+    React.createElement(
+      'label',
+      { className: 'block text-sm my-1' },
       'Preset size (L x W x H):',
-      React.createElement('select', {
-        className: 'border rounded-lg px-2 py-1 ml-2 w-60',
-        onChange: (e) => {
-          const selected = PALLET_SIZES.find(p => p.label === e.target.value);
-          if (selected && selected.L && selected.W && selected.H) {
-            setLimits({ ...limits, palletL: selected.L, palletW: selected.W, palletH: selected.H });
-          }
+      React.createElement(
+        'select',
+        {
+          className: 'border rounded-lg px-2 py-1 ml-2 w-60',
+          onChange: (e) => {
+            const selected = PALLET_SIZES.find(p => p.label === e.target.value);
+            if (selected && selected.L && selected.W && selected.H) {
+              setLimits({
+                ...limits,
+                palletL: selected.L,
+                palletW: selected.W,
+                palletH: selected.H
+              });
+            }
+          },
+          value:
+            PALLET_SIZES.find(
+              p =>
+                p.L === limits.palletL &&
+                p.W === limits.palletW &&
+                p.H === limits.palletH
+            )?.label || 'Custom size'
         },
-        value: PALLET_SIZES.find(
-          p => p.L === limits.palletL && p.W === limits.palletW && p.H === limits.palletH
-        )?.label || "Custom size"
-      },
         ...PALLET_SIZES.map(p =>
           React.createElement('option', { key: p.label, value: p.label }, p.label)
         )
       )
     ),
-    
+
     // Manual inputs
     ...[
-      ['palletL', 'Length', limits.palletL],
-      ['palletW', 'Width', limits.palletW],
-      ['palletH', 'Usable height', limits.palletH],
+      ['palletL', 'Length (mm)', limits.palletL],
+      ['palletW', 'Width (mm)', limits.palletW],
+      ['palletH', 'Usable height (mm)', limits.palletH],
       ['cartonGrossMax', 'Max carton gross (kg)', limits.cartonGrossMax],
+      ['palletGrossMax', 'Max pallet gross (kg)', limits.palletGrossMax],
     ].map(([key, label, value]) =>
       React.createElement(
         'label',
@@ -97,15 +112,16 @@ window.CartonApp.Components.PalletSizeSelector = function({ limits, setLimits })
         React.createElement('input', {
           type: 'number',
           min: 0,
-          step: key === 'cartonGrossMax' ? 0.01 : 1,
-          value: value,
+          step: key.includes('GrossMax') ? 0.01 : 1,
+          value: value ?? '',
           onChange: (e) => handleNumberInput(setLimits, limits, key, e.target.value),
-          className: 'border rounded-lg px-2 py-1 ml-2 w-28',
+          className: 'border rounded-lg px-2 py-1 ml-2 w-32'
         })
       )
     )
   );
 };
+
 
 // Optimization Details Component
 window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits, palletLayers }) {
@@ -148,6 +164,7 @@ window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits,
           )
         ),
         React.createElement("li", null, `Cartons per layer: ${palletTile.perLayer}`),
+        React.createElement("li", null, `Pallet orientation: ${palletTile.palletSwapped ? "Swapped (1200×1000 used)" : "Original (1000×1200)"}`),
         React.createElement("li", null, `Space efficiency: ${spaceEfficiency}%`),
         React.createElement("li", null, `Vertical layers: ${palletLayers}`),
         React.createElement("li", null, `Stack height: ${palletLayers * palletTile.boxH} mm`)

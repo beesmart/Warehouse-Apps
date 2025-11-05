@@ -54,12 +54,17 @@ window.CartonApp.Components.LayerGrid2D = function ({
   patternRows,
   pattern,
 }) {
+  // If pallet orientation was auto-swapped by algorithm, flip L/W for display
+  const palletSwapped = window.CartonApp?.lastTile?.palletSwapped || false;
+  const drawL = palletSwapped ? spaceW : spaceL;
+  const drawW = palletSwapped ? spaceL : spaceW;
+
   const SVG_W = 520;
   const SVG_H = 320;
   const pad = 6;
-  const scale = Math.min(SVG_W / spaceL, SVG_H / spaceW);
-  const outerW = spaceL * scale;
-  const outerH = spaceW * scale;
+  const scale = Math.min(SVG_W / drawL, SVG_H / drawW);
+  const outerW = drawL * scale;
+  const outerH = drawW * scale;
 
   let yOffset = 0;
 
@@ -231,6 +236,17 @@ window.CartonApp.Components.LayerGrid2D = function ({
           React.createElement("span", null, `${label} dimension`)
         )
       )
-    )
+    ),
+
+    // ✅ Visual note if swapped
+    palletSwapped &&
+      React.createElement(
+        "div",
+        {
+          className:
+            "absolute bottom-0 left-0 right-0 text-center text-[10px] text-gray-500 italic mt-1",
+        },
+        "Note: Pallet L/W auto-swapped for optimal fit"
+      )
   );
 };

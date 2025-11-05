@@ -7,13 +7,13 @@ window.CartonApp.Constants = {
   // Default values for form initialization
   // -------------------------------------------------
   DEFAULT_VALUES: {
-    product: { l: 100, w: 100, h: 50, weight: 0.5 },
     carton: { l: 600, w: 400, h: 300 },
     limits: {
       palletL: 1200,
       palletW: 1000,
-      palletH: 1350,
+      palletH: 1200,
       cartonGrossMax: 25,
+      palletGrossMax: 1600,
     },
   },
 
