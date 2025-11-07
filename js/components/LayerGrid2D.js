@@ -54,6 +54,25 @@ window.CartonApp.Components.LayerGrid2D = function ({
   patternRows,
   pattern,
 }) {
+
+    // 🧩 Prevent invalid render states when pallet dimensions are empty or invalid
+  if (
+    !Number.isFinite(spaceL) ||
+    !Number.isFinite(spaceW) ||
+    !Number.isFinite(boxL) ||
+    !Number.isFinite(boxW) ||
+    !Number.isFinite(countL) ||
+    !Number.isFinite(countW) ||
+    countL <= 0 ||
+    countW <= 0
+  ) {
+    return React.createElement(
+      "div",
+      { className: "text-sm text-gray-500 italic p-2" },
+      "Awaiting valid pallet dimensions..."
+    );
+  }
+
   // If pallet orientation was auto-swapped by algorithm, flip L/W for display
   const palletSwapped = window.CartonApp?.lastTile?.palletSwapped || false;
   const drawL = palletSwapped ? spaceW : spaceL;
@@ -193,12 +212,25 @@ window.CartonApp.Components.LayerGrid2D = function ({
         }),
 
         // Draw cartons (patterned or uniform)
-        patternRows
+        // Draw cartons (patterned or uniform)
+        patternRows && Array.isArray(patternRows) && patternRows.length > 0
           ? patternRows.flatMap((row, rowIndex) => {
-              const { rotated, countL, boxL: rowBoxL, boxW: rowBoxW } = row;
+              const { rotated, countL, boxL: rowBoxL, boxW: rowBoxW } = row || {};
+
+              // Skip invalid rows
+              if (
+                !Number.isFinite(countL) ||
+                !Number.isFinite(rowBoxL) ||
+                !Number.isFinite(rowBoxW) ||
+                countL <= 0
+              ) {
+                return [];
+              }
+
               const y = yOffset * scale;
               yOffset += rowBoxW;
-              return Array.from({ length: countL }).map((_, i) => {
+
+              return Array.from({ length: Math.max(0, Math.floor(countL)) }).map((_, i) => {
                 const x = i * rowBoxL * scale;
                 return renderBox(
                   x,
@@ -211,14 +243,17 @@ window.CartonApp.Components.LayerGrid2D = function ({
                 );
               });
             })
-          : Array.from({ length: countL }).flatMap((_, i) =>
-              Array.from({ length: countW }).map((_, j) => {
-                const x = i * boxL * scale;
-                const y = j * boxW * scale;
-                return renderBox(x, y, boxL * scale, boxW * scale, false, i, j);
-              })
+          : (Number.isFinite(countL) && Number.isFinite(countW) && countL > 0 && countW > 0
+              ? Array.from({ length: Math.floor(countL) }).flatMap((_, i) =>
+                  Array.from({ length: Math.floor(countW) }).map((_, j) => {
+                    const x = i * boxL * scale;
+                    const y = j * boxW * scale;
+                    return renderBox(x, y, boxL * scale, boxW * scale, false, i, j);
+                  })
+                )
+              : []
             )
-      )
+      ),
     ),
 
     // Legend
