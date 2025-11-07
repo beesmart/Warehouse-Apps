@@ -53,6 +53,7 @@ window.CartonApp.MainApp = function () {
 
   const palletLayers = palletTile.layers;
   const cartonsPerPallet = palletTile.perLayer * palletLayers;
+  const totalInnersPerPallet = cartonsPerPallet * (carton.innersPerCarton || 0);
   const palletWeight = cartonsPerPallet * cartonWeight;
   const palletOverweight = limits.palletGrossMax && palletWeight > limits.palletGrossMax;
 
@@ -108,6 +109,7 @@ window.CartonApp.MainApp = function () {
             ["w", "Width (mm)", carton.w],
             ["h", "Height (mm)", carton.h],
             ["weight", "Weight (kg)", carton.weight],
+            ['innersPerCarton', 'Inner (products) per carton', carton.innersPerCarton || 0],
           ].map(([key, label, value]) =>
             React.createElement(
               "label",
@@ -218,6 +220,8 @@ window.CartonApp.MainApp = function () {
         React.createElement(
           "section",
           { className: "grid md:grid-cols-2 gap-4" },
+
+          // Carton card
           React.createElement(MetricCard, {
             title: "Carton",
             subtitle: `${carton.l}×${carton.w}×${carton.h} mm`,
@@ -228,20 +232,17 @@ window.CartonApp.MainApp = function () {
             }`,
             error: overweight,
           }),
+
+          // Per pallet card
           React.createElement(MetricCard, {
             title: "Per Pallet",
             subtitle: `${palletTile.perLayer} cartons/layer × ${palletLayers} layers`,
-            value: numberFmt(cartonsPerPallet),
-            unit: "cartons",
-            footer: `${palletWeight.toFixed(1)} kg total ${palletOverweight ? "⚠️ OVER LIMIT" : ""}`,
+            value: `${numberFmt(cartonsPerPallet)} cartons with  ${totalInnersPerPallet}`,
+            unit: "inner products",
+            footer: `${palletWeight.toFixed(1)} kg total  ${
+              palletOverweight ? " ⚠️ OVER LIMIT" : ""
+            }`,
             error: palletOverweight,
-          }),
-          React.createElement(MetricCard, {
-            title: "Per Pallet",
-            subtitle: `${palletTile.perLayer} cartons/layer × ${palletLayers} layers`,
-            value: numberFmt(cartonsPerPallet),
-            unit: "cartons",
-            footer: `${palletWeight.toFixed(1)} kg total`,
           })
         ),
 
@@ -250,6 +251,8 @@ window.CartonApp.MainApp = function () {
           palletTile,
           limits,
           palletLayers,
+          cartonsPerPallet,
+          carton
         }),
 
         // Notes section

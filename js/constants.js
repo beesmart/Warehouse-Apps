@@ -7,7 +7,7 @@ window.CartonApp.Constants = {
   // Default values for form initialization
   // -------------------------------------------------
   DEFAULT_VALUES: {
-    carton: { l: 600, w: 400, h: 300 },
+    carton: { l: 600, w: 400, h: 300, weight: 10.0, innersPerCarton: 0 },
     limits: {
       palletL: 1200,
       palletW: 1000,

@@ -124,7 +124,7 @@ window.CartonApp.Components.PalletSizeSelector = function({ limits, setLimits })
 
 
 // Optimization Details Component
-window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits, palletLayers }) {
+window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits, palletLayers, cartonsPerPallet, carton }) {
   const layoutType = palletTile.pattern?.startsWith("mixed")
     ? "Mixed (alternating rows)"
     : "Uniform (consistent rows)";
@@ -167,7 +167,8 @@ window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits,
         React.createElement("li", null, `Pallet orientation: ${palletTile.palletSwapped ? "Swapped (1200×1000 used)" : "Original (1000×1200)"}`),
         React.createElement("li", null, `Space efficiency: ${spaceEfficiency}%`),
         React.createElement("li", null, `Vertical layers: ${palletLayers}`),
-        React.createElement("li", null, `Stack height: ${palletLayers * palletTile.boxH} mm`)
+        React.createElement("li", null, `Stack height: ${palletLayers * palletTile.boxH} mm`),
+        React.createElement("li", null, `Total inners on pallet: ${cartonsPerPallet * (carton.innersPerCarton || 0)}`)
       )
     )
   );
