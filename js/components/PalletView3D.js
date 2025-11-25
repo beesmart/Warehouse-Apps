@@ -93,81 +93,6 @@ function addHeightGuide(scene, palletL, palletW, palletH) {
 }
 
 // ----------------------------------------------------
-// Helper: Add dimension arrows (L, W, H)
-// ----------------------------------------------------
-function addDimensionArrows(scene, palletL, palletW, palletH, pattern) {
-  const DIMENSION_COLORS = window.CartonApp.Constants.DIMENSION_COLORS;
-  const { getVisibleLabels } = window.CartonApp.Utils;
-
-  // Origin corner
-  const origin = new THREE.Vector3(-palletL / 2, 50, -palletW / 2);
-  const arrowLength = Math.max(palletL, palletW, palletH) * 0.5;
-  const arrowHead = 100;
-
-  // Determine which world axes correspond to L/W/H for this pattern
-  let axisFor = { L: new THREE.Vector3(1, 0, 0), W: new THREE.Vector3(0, 0, 1), H: new THREE.Vector3(0, 1, 0) };
-
-  switch (pattern) {
-    case "upright-rotated":
-      axisFor = { L: new THREE.Vector3(0, 0, 1), W: new THREE.Vector3(1, 0, 0), H: new THREE.Vector3(0, 1, 0) };
-      break;
-    case "laid-side-l":
-      // box laid on side → height becomes W
-      axisFor = { L: new THREE.Vector3(1, 0, 0), W: new THREE.Vector3(0, 1, 0), H: new THREE.Vector3(0, 0, 1) };
-      break;
-    case "laid-side-w":
-      // height becomes L
-      axisFor = { L: new THREE.Vector3(0, 1, 0), W: new THREE.Vector3(0, 0, 1), H: new THREE.Vector3(1, 0, 0) };
-      break;
-    case "laid-h-l":
-      // height becomes W (flat orientation)
-      axisFor = { L: new THREE.Vector3(1, 0, 0), W: new THREE.Vector3(0, 0, 1), H: new THREE.Vector3(0, 1, 0) };
-      break;
-    case "laid-h-w":
-      // height becomes L (flat orientation)
-      axisFor = { L: new THREE.Vector3(0, 0, 1), W: new THREE.Vector3(1, 0, 0), H: new THREE.Vector3(0, 1, 0) };
-      break;
-  }
-
-  const addArrow = (dir, color, label) => {
-    const arrow = new THREE.ArrowHelper(
-      dir.clone().normalize(),
-      origin,
-      arrowLength,
-      color,
-      arrowHead,
-      arrowHead * 0.6
-    );
-    scene.add(arrow);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 128;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = color;
-    ctx.font = "bold 64px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, canvas.width / 2, canvas.height / 2);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
-    const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(300, 150, 1);
-    sprite.position.copy(origin.clone().add(dir.clone().multiplyScalar(arrowLength * 1.1)));
-    scene.add(sprite);
-  };
-
-  addArrow(axisFor.L, DIMENSION_COLORS.L, "L");
-  addArrow(axisFor.W, DIMENSION_COLORS.W, "W");
-  addArrow(axisFor.H, DIMENSION_COLORS.H, "H");
-}
-
-
-
-// ----------------------------------------------------
 // PalletView3D Component
 // ----------------------------------------------------
 window.CartonApp.Components.PalletView3D = function ({
@@ -183,6 +108,8 @@ window.CartonApp.Components.PalletView3D = function ({
   patternRows,
   palletTile,
   cartonWeight,
+  effectiveCartons,
+  multiTile, // NEW: multi-group packing result (or null)
 }) {
   const mountRef = React.useRef(null);
   const sceneRef = React.useRef(null);
@@ -190,15 +117,45 @@ window.CartonApp.Components.PalletView3D = function ({
   const frameRef = React.useRef(null);
   const [viewMode, setViewMode] = React.useState("3D");
 
+  const isMulti = !!multiTile && !!multiTile.multi;
+
   // Compute usage metrics
   const palletSurfaceArea = palletL * palletW;
   const palletVolume = palletL * palletW * palletH;
-  const usedSurfaceArea = (palletTile.usedL || 0) * (palletTile.usedW || 0);
+
+  const maxCartons = isMulti
+    ? multiTile.totalCartons || 0
+    : (perLayer || 0) * (layers || 0);
+
+  const activeCartonCount =
+    Number.isFinite(effectiveCartons) && effectiveCartons > 0 && !isMulti
+      ? Math.min(effectiveCartons, maxCartons)
+      : maxCartons;
+
+  let usedSurfaceArea = 0;
+  if (isMulti && multiTile.usedL && multiTile.usedW) {
+    usedSurfaceArea = multiTile.usedL * multiTile.usedW;
+  } else if (!isMulti && palletTile && palletTile.usedL && palletTile.usedW) {
+    usedSurfaceArea = palletTile.usedL * palletTile.usedW;
+  }
+
   const surfaceUsage =
     palletSurfaceArea > 0 ? (usedSurfaceArea / palletSurfaceArea) * 100 : 0;
-  const cartonsVolume = perLayer * layers * cartonL * cartonW * cartonH;
+
+  const cartonsVolume = isMulti
+    ? multiTile.totalVolume || 0
+    : activeCartonCount * cartonL * cartonW * cartonH;
+
   const volumeUsage =
     palletVolume > 0 ? (cartonsVolume / palletVolume) * 100 : 0;
+
+  const stackHeight = isMulti
+    ? multiTile.maxHeight || 0
+    : layers * cartonH;
+
+  const heightUnused = isMulti
+    ? null
+    : palletH - stackHeight;
 
   React.useEffect(() => {
     if (!mountRef.current || viewMode !== "3D") return;
@@ -217,86 +174,154 @@ window.CartonApp.Components.PalletView3D = function ({
     sceneRef.current = scene;
     rendererRef.current = renderer;
 
-      // ✅ Center correctly on resize or grid load
     const resizeObserver = new ResizeObserver(() => {
-        if (!rendererRef.current || !camera) return;
-        const newWidth = mount.clientWidth;
-        const newHeight = 400;
-        rendererRef.current.setSize(newWidth, newHeight);
-        camera.aspect = newWidth / newHeight;
-        camera.updateProjectionMatrix();
+      if (!rendererRef.current || !camera) return;
+      const newWidth = mount.clientWidth;
+      const newHeight = 400;
+      rendererRef.current.setSize(newWidth, newHeight);
+      camera.aspect = newWidth / newHeight;
+      camera.updateProjectionMatrix();
     });
     resizeObserver.observe(mount);
 
-    // --- If algorithm swapped pallet orientation, flip L↔W in visuals too
-    const drawL = palletTile.palletSwapped ? palletW : palletL;
-    const drawW = palletTile.palletSwapped ? palletL : palletW;
+    const drawL = palletL;
+    const drawW = palletW;
 
-    // Pallet base + height guide + dimension arrows
+    // Pallet base + height guide
     addPalletBase(scene, drawL, drawW);
     addHeightGuide(scene, drawL, drawW, palletH);
-    // addDimensionArrows(scene, drawL, drawW, palletH);
 
-    // Materials
-    const standardMaterial = new THREE.MeshLambertMaterial({ color: 0x4a9eff });
-    const rotatedMaterial = new THREE.MeshLambertMaterial({ color: 0x60a5fa });
     const cartonGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const cartonEdges = new THREE.EdgesGeometry(cartonGeometry);
+    const edgeGeometry = new THREE.EdgesGeometry(cartonGeometry);
     const edgeMaterial = new THREE.LineBasicMaterial({
       color: 0x1e40af,
       linewidth: 1,
     });
 
-    // Add cartons
-    for (let layer = 0; layer < layers; layer++) {
-      const yOffset = 100 + layer * cartonH + cartonH / 2;
-      if (patternRows) {
-        let zStart = -drawW / 2;
-        patternRows.forEach((row) => {
-          const { rotated, countL, boxL: rowBoxL, boxW: rowBoxW } = row;
-          const rowUsedL = countL * rowBoxL;
-          const xStart = -rowUsedL / 2;
-          
-          for (let i = 0; i < countL; i++) {
-            const carton = new THREE.Mesh(
-              cartonGeometry,
-              rotated ? rotatedMaterial : standardMaterial
-            );
-            const edges = new THREE.LineSegments(cartonEdges, edgeMaterial);
-            const xPos = xStart + rowBoxL / 2 + i * rowBoxL;
-            const zPos = zStart + rowBoxW / 2;
-            carton.scale.set(rowBoxL, cartonH, rowBoxW);
-            edges.scale.set(rowBoxL, cartonH, rowBoxW);
-            carton.position.set(xPos, yOffset, zPos);
-            edges.position.set(xPos, yOffset, zPos);
-            carton.castShadow = true;
-            carton.receiveShadow = true;
-            scene.add(carton);
-            scene.add(edges);
-          }
-          zStart += rowBoxW;
+    if (isMulti && multiTile && Array.isArray(multiTile.groups)) {
+      // ---------------------------
+      // MULTI-GROUP DRAWING
+      // ---------------------------
+      multiTile.groups.forEach((group) => {
+        if (!group.placements || !group.placements.length) return;
+
+        const mat = new THREE.MeshLambertMaterial({
+          color: group.color || 0x4a9eff,
         });
-      } else {
-        const countL = Math.floor(drawL / cartonL);
-        const countW = Math.floor(drawW / cartonW);
-        const usedL = countL * cartonL;
-        const usedW = countW * cartonW;
-        const xStart = -usedL / 2;
-        const zStart = -usedW / 2;
-        for (let i = 0; i < countL; i++) {
-          for (let j = 0; j < countW; j++) {
-            const carton = new THREE.Mesh(cartonGeometry, standardMaterial);
-            const edges = new THREE.LineSegments(cartonEdges, edgeMaterial);
-            carton.scale.set(cartonL, cartonH, cartonW);
-            edges.scale.set(cartonL, cartonH, cartonW);
-            const xPos = xStart + cartonL / 2 + i * cartonL;
-            const zPos = zStart + cartonW / 2 + j * cartonW;
-            carton.position.set(xPos, yOffset, zPos);
-            edges.position.set(xPos, yOffset, zPos);
-            carton.castShadow = true;
-            carton.receiveShadow = true;
-            scene.add(carton);
-            scene.add(edges);
+
+        group.placements.forEach((p) => {
+          const mesh = new THREE.Mesh(cartonGeometry, mat);
+          const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+
+          mesh.scale.set(p.l, p.h, p.w);
+          edges.scale.set(p.l, p.h, p.w);
+
+          mesh.position.set(p.x, p.y, p.z);
+          edges.position.set(p.x, p.y, p.z);
+
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+
+          scene.add(mesh);
+          scene.add(edges);
+        });
+      });
+    } else {
+      // ---------------------------
+      // SINGLE-CARTON DRAWING
+      // ---------------------------
+      const standardMaterial = new THREE.MeshLambertMaterial({
+        color: 0x4a9eff,
+      });
+      const rotatedMaterial = new THREE.MeshLambertMaterial({
+        color: 0x60a5fa,
+      });
+
+      let placed = 0;
+
+      for (let layerIndex = 0; layerIndex < layers; layerIndex++) {
+        const yOffset = 100 + layerIndex * cartonH + cartonH / 2;
+
+        if (patternRows) {
+          let zStart = -drawW / 2;
+          patternRows.forEach((row) => {
+            if (placed >= activeCartonCount) return;
+
+            const { rotated, countL, boxL: rowBoxL, boxW: rowBoxW } = row;
+            const rowCountL = Math.max(0, Math.floor(countL) || 0);
+            const rowUsedL = countL * rowBoxL;
+            const xStart = -rowUsedL / 2;
+
+            for (let i = 0; i < rowCountL; i++) {
+              if (placed >= activeCartonCount) break;
+
+              const carton = new THREE.Mesh(
+                cartonGeometry,
+                rotated ? rotatedMaterial : standardMaterial
+              );
+              const edges = new THREE.LineSegments(
+                edgeGeometry,
+                edgeMaterial
+              );
+
+              const xPos = xStart + rowBoxL / 2 + i * rowBoxL;
+              const zPos = zStart + rowBoxW / 2;
+
+              carton.scale.set(rowBoxL, cartonH, rowBoxW);
+              edges.scale.set(rowBoxL, cartonH, rowBoxW);
+              carton.position.set(xPos, yOffset, zPos);
+              edges.position.set(xPos, yOffset, zPos);
+
+              carton.castShadow = true;
+              carton.receiveShadow = true;
+
+              scene.add(carton);
+              scene.add(edges);
+
+              placed++;
+            }
+            zStart += rowBoxW;
+          });
+        } else {
+          const safeCountL = Math.max(0, Math.floor(drawL / cartonL));
+          const safeCountW = Math.max(0, Math.floor(drawW / cartonW));
+
+          const usedL = safeCountL * cartonL;
+          const usedW = safeCountW * cartonW;
+
+          const xStart = -usedL / 2;
+          const zStart = -usedW / 2;
+
+          for (let i = 0; i < safeCountL; i++) {
+            for (let j = 0; j < safeCountW; j++) {
+              if (placed >= activeCartonCount) break;
+
+              const carton = new THREE.Mesh(
+                cartonGeometry,
+                standardMaterial
+              );
+              const edges = new THREE.LineSegments(
+                edgeGeometry,
+                edgeMaterial
+              );
+
+              carton.scale.set(cartonL, cartonH, cartonW);
+              edges.scale.set(cartonL, cartonH, cartonW);
+
+              const xPos = xStart + cartonL / 2 + i * cartonL;
+              const zPos = zStart + cartonW / 2 + j * cartonW;
+
+              carton.position.set(xPos, yOffset, zPos);
+              edges.position.set(xPos, yOffset, zPos);
+
+              carton.castShadow = true;
+              carton.receiveShadow = true;
+
+              scene.add(carton);
+              scene.add(edges);
+
+              placed++;
+            }
           }
         }
       }
@@ -316,17 +341,17 @@ window.CartonApp.Components.PalletView3D = function ({
       mountRef.current.style.cursor = "grabbing";
     };
     const onMove = (e) => {
-    if (!isDragging || !mountRef.current) return;
-    const dx = e.clientX - prevX;
-    const dy = e.clientY - prevY;
-    rotX += dx * 0.01;
-    rotY = Math.max(0.1, Math.min(1.2, rotY - dy * 0.005));
-    prevX = e.clientX;
-    prevY = e.clientY;
+      if (!isDragging || !mountRef.current) return;
+      const dx = e.clientX - prevX;
+      const dy = e.clientY - prevY;
+      rotX += dx * 0.01;
+      rotY = Math.max(0.1, Math.min(1.2, rotY - dy * 0.005));
+      prevX = e.clientX;
+      prevY = e.clientY;
     };
     const onUp = () => {
-    isDragging = false;
-    if (mountRef.current) mountRef.current.style.cursor = "grab";
+      isDragging = false;
+      if (mountRef.current) mountRef.current.style.cursor = "grab";
     };
 
     mountRef.current.addEventListener("mousedown", onDown);
@@ -357,7 +382,28 @@ window.CartonApp.Components.PalletView3D = function ({
       }
       if (rendererRef.current) rendererRef.current.dispose();
     };
-  }, [palletL, palletW, palletH, cartonL, cartonW, cartonH, pattern, perLayer, layers, patternRows, viewMode]);
+  }, [
+    palletL,
+    palletW,
+    palletH,
+    cartonL,
+    cartonW,
+    cartonH,
+    pattern,
+    perLayer,
+    layers,
+    patternRows,
+    viewMode,
+    effectiveCartons,
+    isMulti,
+    multiTile,
+  ]);
+
+  const displayLayers = isMulti ? (multiTile.totalLayers || 0) : layers;
+  const displayCartonsPerLayer = isMulti ? "–" : perLayer;
+  const displayTotalCartons = isMulti
+    ? multiTile.totalCartons || 0
+    : (perLayer || 0) * (layers || 0);
 
   // ----------------------------------------------------
   // Render
@@ -413,7 +459,9 @@ window.CartonApp.Components.PalletView3D = function ({
             {
               className: "text-xs text-gray-500 mt-2 text-center",
             },
-            "Click and drag to rotate view"
+            isMulti
+              ? "Click and drag to rotate view. Colours represent different carton groups."
+              : "Click and drag to rotate view"
           )
         )
       : React.createElement(LayerGrid2D, {
@@ -428,6 +476,8 @@ window.CartonApp.Components.PalletView3D = function ({
           usedW: Math.floor(palletW / cartonW) * cartonW,
           patternRows: patternRows,
           pattern: palletTile.pattern,
+          activeCartons: effectiveCartons,
+          multiTile: isMulti ? multiTile : null,
         }),
 
     // Stats summary
@@ -437,18 +487,71 @@ window.CartonApp.Components.PalletView3D = function ({
       React.createElement(
         "div",
         { className: "grid grid-cols-2 gap-2" },
-        React.createElement("div", null, React.createElement("span", { className: "text-gray-500" }, "Layers:"), " ", layers),
-        React.createElement("div", null, React.createElement("span", { className: "text-gray-500" }, "Cartons/layer:"), " ", perLayer),
-        React.createElement("div", null, React.createElement("span", { className: "text-gray-500" }, "Total cartons:"), " ", perLayer * layers),
-        React.createElement("div", null, React.createElement("span", { className: "text-gray-500" }, "Total weight:"), " ", (perLayer * layers * cartonWeight).toFixed(1), " kg")
+        React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Layers:"),
+          " ",
+          isMulti ? "multi" : displayLayers
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Cartons/layer:"),
+          " ",
+          displayCartonsPerLayer
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Total cartons:"),
+          " ",
+          displayTotalCartons
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Total weight:"),
+          " ",
+          (displayTotalCartons * cartonWeight).toFixed(1),
+          " kg"
+        )
       ),
       React.createElement(
         "div",
         { className: "grid grid-cols-2 gap-2" },
-        React.createElement("div", null, React.createElement("span", { className: "text-gray-500" }, "Surface usage:"), " ", surfaceUsage.toFixed(1), "%"),
-        React.createElement("div", null, React.createElement("span", { className: "text-gray-500" }, "Volume usage:"), " ", volumeUsage.toFixed(1), "%"),
-        React.createElement("div", null, React.createElement("span", { className: "text-gray-500" }, "Stack height:"), " ", layers * cartonH, " mm"),
-        React.createElement("div", null, React.createElement("span", { className: "text-gray-500" }, "Height unused:"), " ", palletH - layers * cartonH, " mm")
+        React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Surface usage:"),
+          " ",
+          surfaceUsage.toFixed(1),
+          "%"
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Volume usage:"),
+          " ",
+          volumeUsage.toFixed(1),
+          "%"
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Stack height:"),
+          " ",
+          isMulti ? "varies" : `${stackHeight} mm`
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Height unused:"),
+          " ",
+          isMulti || heightUnused == null
+            ? "—"
+            : `${heightUnused} mm`
+        )
       )
     )
   );

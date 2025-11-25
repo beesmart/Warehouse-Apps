@@ -14,6 +14,7 @@ window.CartonApp.Constants = {
       palletH: 1200,
       cartonGrossMax: 25,
       palletGrossMax: 1600,
+      desiredCartons: "",
     },
   },
 
@@ -27,6 +28,19 @@ window.CartonApp.Constants = {
     { label: "Euro Pallet (1200 × 800 mm x 1200mm)", L: 1200, W: 800, H: 1200 },
     { label: "Half Pallet (800 × 600 mm x 800mm)", L: 800, W: 600, H: 800 },
     { label: "Custom size", L: null, W: null, H: null },
+  ],
+
+  
+  //-------------------------------------------------
+  // Group colors for carton groups
+  // -------------------------------------------------
+
+  GROUP_COLORS: [
+    "#4a9eff", // blue
+    "#f59e0b", // amber
+    "#10b981", // green
+    "#ef4444", // red
+    "#8b5cf6", // purple
   ],
 
   // -------------------------------------------------

@@ -104,6 +104,7 @@ window.CartonApp.Components.PalletSizeSelector = function({ limits, setLimits })
       ['palletH', 'Usable height (mm)', limits.palletH],
       ['cartonGrossMax', 'Max carton gross (kg)', limits.cartonGrossMax],
       ['palletGrossMax', 'Max pallet gross (kg)', limits.palletGrossMax],
+
     ].map(([key, label, value]) =>
       React.createElement(
         'label',
