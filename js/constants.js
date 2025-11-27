@@ -9,11 +9,11 @@ window.CartonApp.Constants = {
   DEFAULT_VALUES: {
     carton: { l: 600, w: 400, h: 300, weight: 10.0, innersPerCarton: 0 },
     limits: {
-      palletL: 1200,
-      palletW: 1000,
-      palletH: 1200,
+      palletL: 6058,
+      palletW: 2438,
+      palletH: 2591,
       cartonGrossMax: 25,
-      palletGrossMax: 1600,
+      palletGrossMax: 28000,
       desiredCartons: "",
     },
   },
@@ -22,12 +22,9 @@ window.CartonApp.Constants = {
   // Common pallet presets
   // -------------------------------------------------
   PALLET_SIZES: [
-    { label: "UK Standard (1200 × 1000 mm x 1200mm)", L: 1200, W: 1000, H: 1200 },
-    { label: "Aldi Pallet (1200 × 1000 mm x 1600mm)", L: 1200, W: 1000, H: 1600 },
-    { label: "LIDL Pallet (1200 × 800 mm x 1600mm)", L: 1200, W: 800, H: 1600 },
-    { label: "Euro Pallet (1200 × 800 mm x 1200mm)", L: 1200, W: 800, H: 1200 },
-    { label: "Half Pallet (800 × 600 mm x 800mm)", L: 800, W: 600, H: 800 },
-    { label: "Custom size", L: null, W: null, H: null },
+    { label: "20ft Container (6058 × 2438 mm x 2591mm)", L: 6058, W: 2438, H: 2591, WeightLimit: 28000 },
+    { label: "40ft Container (12192 × 2438 mm x 2896mm)", L: 12192, W: 2438, H: 2896, WeightLimit: 32000 },
+    { label: "Custom size", L: null, W: null, H: null, WeightLimit: null },
   ],
 
   

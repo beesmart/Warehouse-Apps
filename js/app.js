@@ -34,6 +34,7 @@ window.CartonApp.MainApp = function () {
       w: 300,
       h: 200,
       qty: 10,
+      weight: 10.0,
       color: "#4a9eff",
     },
   ]);
@@ -108,8 +109,19 @@ window.CartonApp.MainApp = function () {
   const totalInnersPerPallet =
     effectiveCartons * (carton.innersPerCarton || 0);
 
-  const palletWeight =
-    effectiveCartons * cartonWeight;
+  // Calculate weight based on mode
+  let palletWeight = 0;
+  if (isMultiActive && multiPack && multiPack.groups) {
+    // Multi-carton mode: sum up weight from all placed boxes
+    palletWeight = multiPack.groups.reduce((total, group) => {
+      const groupWeight = Number(group.weight) || 0;
+      const placedQty = Number(group.placedQty) || 0;
+      return total + (groupWeight * placedQty);
+    }, 0);
+  } else {
+    // Single-carton mode
+    palletWeight = effectiveCartons * cartonWeight;
+  }
 
   const palletOverweight =
     limits.palletGrossMax && palletWeight > limits.palletGrossMax;
@@ -128,6 +140,7 @@ window.CartonApp.MainApp = function () {
         w: 300,
         h: 200,
         qty: 10,
+        weight: 10.0,
         color: GROUP_COLORS[newIndex % GROUP_COLORS.length],
       },
     ]);
@@ -183,10 +196,10 @@ window.CartonApp.MainApp = function () {
         "div",
         { className: "lg:col-span-1 space-y-4" },
 
-        // CARTON section
+        // CARTON section (hidden for now)
         React.createElement(
           "section",
-          { className: "p-4 border rounded-2xl shadow-sm bg-white" },
+          { className: "p-4 border rounded-2xl shadow-sm bg-white", style: { display: "none" } },
           React.createElement(
             "h3",
             { className: "font-semibold mb-2" },
@@ -357,20 +370,37 @@ window.CartonApp.MainApp = function () {
                 )
               ),
 
-              // Quantity field
+              // Quantity and Weight row
               React.createElement(
-                "label",
-                { className: "text-xs text-gray-700" },
-                "Quantity",
-                React.createElement("input", {
-                  type: "number",
-                  min: 0,
-                  value: g.qty,
-                  onChange: (e) =>
-                    updateGroup(g.id, "qty", Number(e.target.value)),
-                  className:
-                    "border rounded px-2 py-1 w-32 ml-2 text-sm",
-                })
+                "div",
+                { className: "grid grid-cols-2 gap-2" },
+                React.createElement(
+                  "label",
+                  { className: "text-xs text-gray-700" },
+                  "Quantity",
+                  React.createElement("input", {
+                    type: "number",
+                    min: 0,
+                    value: g.qty,
+                    onChange: (e) =>
+                      updateGroup(g.id, "qty", Number(e.target.value)),
+                    className: "border rounded px-2 py-1 w-full text-sm",
+                  })
+                ),
+                React.createElement(
+                  "label",
+                  { className: "text-xs text-gray-700" },
+                  "Weight (kg)",
+                  React.createElement("input", {
+                    type: "number",
+                    min: 0,
+                    step: 0.1,
+                    value: g.weight || 0,
+                    onChange: (e) =>
+                      updateGroup(g.id, "weight", Number(e.target.value)),
+                    className: "border rounded px-2 py-1 w-full text-sm",
+                  })
+                )
               )
             )
           ),
@@ -449,20 +479,9 @@ window.CartonApp.MainApp = function () {
           "section",
           { className: "grid md:grid-cols-2 gap-4" },
 
-          // Carton card
-          React.createElement(MetricCard, {
-            title: "Carton",
-            subtitle: `${carton.l}×${carton.w}×${carton.h} mm`,
-            value: 1,
-            unit: "carton",
-            footer: `${cartonWeight.toFixed(2)} kg gross ${
-              overweight ? "(OVER LIMIT)" : ""
-            }`,
-          }),
-
           // Per pallet card
           React.createElement(MetricCard, {
-            title: "Per Pallet",
+            title: "Per Container",
             subtitle: isMultiActive
               ? `Multi-group: ${cartonsPerPallet} cartons across ${palletLayers} layer${
                   palletLayers === 1 ? "" : "s"
@@ -472,21 +491,21 @@ window.CartonApp.MainApp = function () {
               effectiveCartons
             )} cartons with ${totalInnersPerPallet}`,
             unit: "inner products",
-            footer: `${palletWeight.toFixed(1)} kg total  ${
-              palletOverweight ? " ⚠️ OVER LIMIT" : ""
+            footer: `${palletWeight.toFixed(1)} kg total ${
+              palletOverweight ? ` ⚠️ OVER LIMIT (remove ${(palletWeight - limits.palletGrossMax).toFixed(1)} kg)` : ""
             }`,
             error: palletOverweight,
-          })
-        ),
+          }),
 
-        // Optimization summary (currently single-carton-based)
-        React.createElement(window.CartonApp.Components.OptimizationDetails, {
-          palletTile,
-          limits,
-          palletLayers: singleLayers,
-          cartonsPerPallet: singleCartonsPerPallet,
-          carton,
-        }),
+          // Optimization summary (currently single-carton-based)
+          React.createElement(window.CartonApp.Components.OptimizationDetails, {
+            palletTile,
+            limits,
+            palletLayers: singleLayers,
+            cartonsPerPallet: singleCartonsPerPallet,
+            carton,
+          }),
+        ),
 
         // Notes section
         React.createElement(window.CartonApp.Components.NotesAndTips)

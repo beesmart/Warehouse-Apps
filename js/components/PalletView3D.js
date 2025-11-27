@@ -12,12 +12,12 @@ const LayerGrid2D = window.CartonApp.Components.LayerGrid2D;
 // Helper: Create 3D Scene
 // ----------------------------------------------------
 function create3DScene(mountRef, config) {
-  const { width, height, cameraDistance = 3000, cameraHeight = 2000 } = config;
+  const { width, height, cameraDistance = 3000, cameraHeight = 2000, groundSize = 5000, farPlane = 10000 } = config;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf5f5f5);
 
-  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, farPlane);
   camera.position.set(cameraDistance, cameraHeight, cameraDistance);
   camera.lookAt(0, 0, 0);
 
@@ -31,11 +31,11 @@ function create3DScene(mountRef, config) {
   scene.add(ambientLight);
 
   const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
-  directionalLight.position.set(1000, 2000, 1000);
+  directionalLight.position.set(cameraDistance * 0.3, cameraHeight, cameraDistance * 0.3);
   directionalLight.castShadow = true;
   scene.add(directionalLight);
 
-  const groundGeometry = new THREE.PlaneGeometry(5000, 5000);
+  const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize);
   const groundMaterial = new THREE.MeshLambertMaterial({ color: 0xe0e0e0 });
   const ground = new THREE.Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
@@ -164,11 +164,28 @@ window.CartonApp.Components.PalletView3D = function ({
     let width = mount.clientWidth;
     let height = 400;
 
+    // Calculate scene scale based on pallet/container dimensions
+    const maxDimension = Math.max(palletL, palletW, palletH);
+
+    // Scale camera distance and ground size based on object size
+    // For containers (>5000mm), we need much larger scene
+    const scaleFactor = Math.max(1, maxDimension / 2000);
+    const baseCameraDistance = 2500;
+    const baseCameraHeight = 2000;
+    const baseGroundSize = 5000;
+
+    const cameraDistance = baseCameraDistance * scaleFactor;
+    const cameraHeight = baseCameraHeight * scaleFactor;
+    const groundSize = baseGroundSize * scaleFactor * 1.5;
+    const farPlane = cameraDistance * 10;
+
     const { scene, camera, renderer } = create3DScene(mountRef, {
       width,
       height,
-      cameraDistance: 2500,
-      cameraHeight: 2000,
+      cameraDistance,
+      cameraHeight,
+      groundSize,
+      farPlane,
     });
 
     sceneRef.current = scene;
@@ -327,12 +344,13 @@ window.CartonApp.Components.PalletView3D = function ({
       }
     }
 
-    // Camera controls
+    // Camera controls with zoom
     let isDragging = false;
     let prevX = 0;
     let prevY = 0;
     let rotX = Math.PI / 4;
     let rotY = 0.3;
+    let zoomLevel = 1.0;
 
     const onDown = (e) => {
       isDragging = true;
@@ -354,18 +372,26 @@ window.CartonApp.Components.PalletView3D = function ({
       if (mountRef.current) mountRef.current.style.cursor = "grab";
     };
 
+    // Zoom with mouse wheel
+    const onWheel = (e) => {
+      e.preventDefault();
+      const delta = e.deltaY * -0.001;
+      zoomLevel = Math.max(0.3, Math.min(3.0, zoomLevel + delta));
+    };
+
     mountRef.current.addEventListener("mousedown", onDown);
     mountRef.current.addEventListener("mousemove", onMove);
     mountRef.current.addEventListener("mouseup", onUp);
     mountRef.current.addEventListener("mouseleave", onUp);
+    mountRef.current.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("mouseup", onUp);
     window.addEventListener("mousemove", onMove);
     mountRef.current.style.cursor = "grab";
 
     const animate = () => {
       frameRef.current = requestAnimationFrame(animate);
-      const radius = 3000;
-      const height = 800 + rotY * 1500;
+      const radius = cameraDistance / zoomLevel;
+      const height = (cameraHeight * 0.4 + rotY * cameraHeight * 0.6) / zoomLevel;
       camera.position.x = Math.sin(rotX) * radius;
       camera.position.y = height;
       camera.position.z = Math.cos(rotX) * radius;
@@ -414,7 +440,7 @@ window.CartonApp.Components.PalletView3D = function ({
     React.createElement(
       "div",
       { className: "flex items-center justify-between mb-2" },
-      React.createElement("h4", { className: "font-semibold" }, "Pallet Visualization"),
+      React.createElement("h4", { className: "font-semibold" }, "Container Visualization"),
       React.createElement(
         "div",
         { className: "flex gap-1" },
@@ -460,8 +486,8 @@ window.CartonApp.Components.PalletView3D = function ({
               className: "text-xs text-gray-500 mt-2 text-center",
             },
             isMulti
-              ? "Click and drag to rotate view. Colours represent different carton groups."
-              : "Click and drag to rotate view"
+              ? "Click and drag to rotate • Scroll to zoom • Colours represent different carton groups"
+              : "Click and drag to rotate • Scroll to zoom"
           )
         )
       : React.createElement(LayerGrid2D, {

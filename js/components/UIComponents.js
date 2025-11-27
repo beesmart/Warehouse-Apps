@@ -61,7 +61,7 @@ window.CartonApp.Components.PalletSizeSelector = function({ limits, setLimits })
     'section',
     { className: 'p-4 border rounded-2xl shadow-sm bg-white' },
     
-    React.createElement('h3', { className: 'font-semibold mb-2' }, 'Pallet (CHEP)'),
+    React.createElement('h3', { className: 'font-semibold mb-2' }, 'Containers'),
 
     // Preset dropdown
     React.createElement(
@@ -79,7 +79,8 @@ window.CartonApp.Components.PalletSizeSelector = function({ limits, setLimits })
                 ...limits,
                 palletL: selected.L,
                 palletW: selected.W,
-                palletH: selected.H
+                palletH: selected.H,
+                palletGrossMax: selected.WeightLimit || limits.palletGrossMax
               });
             }
           },
@@ -145,7 +146,7 @@ window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits,
     React.createElement(
       "div",
       { className: "text-sm" },
-      React.createElement("h5", { className: "font-medium text-gray-700 mb-1" }, "Pallet Configuration"),
+      React.createElement("h5", { className: "font-medium text-gray-700 mb-1" }, "Container Configuration"),
       React.createElement(
         "ul",
         { className: "list-disc text-gray-600 pl-5 space-y-0.5" },

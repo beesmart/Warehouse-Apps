@@ -330,14 +330,34 @@ window.CartonApp.Constants = window.CartonApp.Constants || {};
           w,
           h,
           qty,
+          weight: Number(g.weight) || 0,
           placedQty: 0,
           placements: [],
         });
         return;
       }
 
-      // If box is too large for pallet in any dimension, skip
-      if (l > palletL || w > palletW || h > palletH) {
+      // Generate possible orientations for this box
+      const orientations = [
+        { l, w, h, label: "upright" },
+        { l: w, w: l, h, label: "upright-rotated" },
+      ];
+
+      if (allowVerticalFlip) {
+        orientations.push(
+          { l: w, w: h, h: l, label: "laid-side-l" },
+          { l, w: h, h: w, label: "laid-side-w" },
+          { l: h, w: l, h: w, label: "laid-h-l" },
+          { l: h, w, h: l, label: "laid-h-w" }
+        );
+      }
+
+      // Filter out orientations that don't fit the pallet at all
+      const validOrientations = orientations.filter(o =>
+        o.l <= palletL && o.w <= palletW && o.h <= palletH
+      );
+
+      if (validOrientations.length === 0) {
         resultGroups.push({
           id: g.id,
           name: g.name,
@@ -346,6 +366,7 @@ window.CartonApp.Constants = window.CartonApp.Constants || {};
           w,
           h,
           qty,
+          weight: Number(g.weight) || 0,
           placedQty: 0,
           placements: [],
         });
@@ -354,39 +375,52 @@ window.CartonApp.Constants = window.CartonApp.Constants || {};
 
       // Place each box in this group
       for (let i = 0; i < qty; i++) {
-        // Find the best position using heightmap
-        const pos = findBestPosition(l, w, h);
-        
-        if (!pos) {
-          // No valid position found - pallet is full for this box size
+        // Try each orientation and pick the best position
+        let bestPos = null;
+        let bestOrientation = null;
+        let bestBaseH = Infinity;
+
+        validOrientations.forEach(orientation => {
+          const pos = findBestPosition(orientation.l, orientation.w, orientation.h);
+          if (pos && pos.baseH < bestBaseH) {
+            bestPos = pos;
+            bestOrientation = orientation;
+            bestBaseH = pos.baseH;
+          }
+        });
+
+        if (!bestPos || !bestOrientation) {
+          // No valid position found - pallet is full
           break;
         }
 
-        const { posL, posW, baseH } = pos;
-        const topH = baseH + h;
+        const { posL, posW, baseH } = bestPos;
+        const { l: boxL, w: boxW, h: boxH } = bestOrientation;
+        const topH = baseH + boxH;
 
         // Update heightmap
-        setHeight(posL, posW, l, w, topH);
+        setHeight(posL, posW, boxL, boxW, topH);
 
         // Calculate world coordinates (centered around origin)
-        const worldX = posL + l / 2 - palletL / 2;
-        const worldZ = posW + w / 2 - palletW / 2;
-        const worldY = baseH + h / 2 + 100; // +100 for pallet base offset
+        const worldX = posL + boxL / 2 - palletL / 2;
+        const worldZ = posW + boxW / 2 - palletW / 2;
+        const worldY = baseH + boxH / 2 + 100; // +100 for pallet base offset
 
         // Determine layer index (approximate, for display purposes)
-        const layerIndex = Math.floor(baseH / Math.max(h, 1));
+        const layerIndex = Math.floor(baseH / Math.max(boxH, 1));
 
         groupPlacements.push({
           x: worldX,
           y: worldY,
           z: worldZ,
-          l,
-          w,
-          h,
+          l: boxL,
+          w: boxW,
+          h: boxH,
           groupId: g.id,
           color,
           layerIndex,
           indexInGroup: placedInGroup,
+          orientation: bestOrientation.label,
           // Store local coords for debugging
           localL: posL,
           localW: posW,
@@ -395,13 +429,13 @@ window.CartonApp.Constants = window.CartonApp.Constants || {};
 
         placedInGroup++;
         totalCartons++;
-        totalVolume += l * w * h;
+        totalVolume += boxL * boxW * boxH;
 
         // Update bounding box tracking
         minUsedL = Math.min(minUsedL, posL);
-        maxUsedL = Math.max(maxUsedL, posL + l);
+        maxUsedL = Math.max(maxUsedL, posL + boxL);
         minUsedW = Math.min(minUsedW, posW);
-        maxUsedW = Math.max(maxUsedW, posW + w);
+        maxUsedW = Math.max(maxUsedW, posW + boxW);
         maxUsedH = Math.max(maxUsedH, topH);
       }
 
@@ -413,6 +447,7 @@ window.CartonApp.Constants = window.CartonApp.Constants || {};
         w,
         h,
         qty,
+        weight: Number(g.weight) || 0,
         placedQty: placedInGroup,
         placements: groupPlacements,
       });
