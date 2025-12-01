@@ -62,31 +62,76 @@ window.CartonApp.MainApp = function () {
   // -------------------------------------------------
   return React.createElement(
     "div",
-    { className: "p-6 space-y-6" },
-    // Header
+    { className: "min-h-screen" },
+
+    // Navigation Bar
     React.createElement(
-      "header",
-      { className: "" },
-      React.createElement(
-        "h1",
-        { className: "text-2xl font-bold pb-2" },
-        "Carton & Pallet Planner"
-      ),
+      "nav",
+      { className: "bg-gray-700 text-white" },
       React.createElement(
         "div",
-        { className: "text-md text-blue-600" },
-        "All dimensions in ",
-        React.createElement("b", {}, "mm"),
-        " and weights in ",
-        React.createElement("b", {}, "kg"),
-        "."
-      ),
+        { className: "mx-auto px-4 sm:px-6 lg:px-8" },
+        React.createElement(
+          "div",
+          { className: "flex items-center justify-between h-14" },
+          // Logo / Brand
+          React.createElement(
+            "div",
+            { className: "flex items-center gap-2" },
+            React.createElement(
+              "span",
+              { className: "font-semibold text-lg" },
+              "Carton & Pallet - Planner & Visualizer"
+            )
+          ),
+          // Nav Links
+          React.createElement(
+            "div",
+            { className: "flex items-center gap-1" },
+            React.createElement(
+              "a",
+              {
+                href: "https://tools.e-bedding.co.uk/pallets",
+                className: "px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 transition-colors"
+              },
+              "Pallets"
+            ),
+            React.createElement(
+              "a",
+              {
+                href: "https://tools.e-bedding.co.uk/containers",
+                className: "px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
+              },
+              "Containers"
+            )
+          )
+        )
+      )
     ),
 
-    // Main Layout
+    // Main Content
     React.createElement(
       "div",
-      { className: "grid grid-cols-1 lg:grid-cols-3 gap-6" },
+      { className: "p-6 space-y-6" },
+      // Header
+      React.createElement(
+        "header",
+        { className: "" },
+        React.createElement(
+          "div",
+          { className: "text-md text-blue-600" },
+          "All dimensions in ",
+          React.createElement("b", {}, "mm"),
+          " and weights in ",
+          React.createElement("b", {}, "kg"),
+          "."
+        )
+      ),
+
+      // Main Layout
+      React.createElement(
+        "div",
+        { className: "grid grid-cols-1 lg:grid-cols-3 gap-6" },
 
       // -----------------------
       // INPUT PANEL
@@ -258,7 +303,8 @@ window.CartonApp.MainApp = function () {
         // Notes section
         React.createElement(window.CartonApp.Components.NotesAndTips)
       )
-    )
+      )
+    ) // Close main content div
   );
 };
 
