@@ -22,8 +22,10 @@ window.CartonApp.Constants = {
   // Common pallet presets
   // -------------------------------------------------
   PALLET_SIZES: [
-    { label: "20ft Container (6058 × 2438 mm x 2591mm)", L: 6058, W: 2438, H: 2591, WeightLimit: 28000 },
-    { label: "40ft Container (12192 × 2438 mm x 2896mm)", L: 12192, W: 2438, H: 2896, WeightLimit: 32000 },
+    { label: "20' Standard (5895 × 2350 mm x 2392mm)", L: 5895, W: 2350, H: 2392, WeightLimit: 28230 },
+    { label: "40' Standard (12029 × 2350 mm x 2392mm)", L: 12029, W: 2350, H: 2392, WeightLimit: 26700 },
+    { label: "40' High Cube (12024 × 2350 mm x 2697mm)", L: 12024, W: 2350, H: 2697, WeightLimit: 26460 },
+    { label: "45' High Cube (13556 × 2352 mm x 2700mm)", L: 13556, W: 2352, H: 2700, WeightLimit: 27700 },
     { label: "Custom size", L: null, W: null, H: null, WeightLimit: null },
   ],
 

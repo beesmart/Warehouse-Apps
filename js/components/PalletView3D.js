@@ -110,6 +110,10 @@ window.CartonApp.Components.PalletView3D = function ({
   cartonWeight,
   effectiveCartons,
   multiTile, // NEW: multi-group packing result (or null)
+  palletGrossMax, // Weight limit
+  activeContainerIndex, // Index of current container being viewed
+  totalContainers, // Total number of containers
+  onContainerChange, // Callback to change active container
 }) {
   const mountRef = React.useRef(null);
   const sceneRef = React.useRef(null);
@@ -117,7 +121,29 @@ window.CartonApp.Components.PalletView3D = function ({
   const frameRef = React.useRef(null);
   const [viewMode, setViewMode] = React.useState("3D");
 
+  // Track visibility of each group by group id
+  const [hiddenGroups, setHiddenGroups] = React.useState({});
+
   const isMulti = !!multiTile && !!multiTile.multi;
+
+  // Get unique groups for visibility toggles
+  const groupList = React.useMemo(() => {
+    if (!isMulti || !multiTile || !Array.isArray(multiTile.groups)) return [];
+    return multiTile.groups.map(g => ({
+      id: g.id,
+      name: g.name || `${g.l}×${g.w}×${g.h}`,  // Use name, or dimensions as fallback
+      color: g.color || 0x4a9eff,
+      count: g.placements ? g.placements.length : 0
+    }));
+  }, [isMulti, multiTile]);
+
+  // Toggle visibility for a group
+  const toggleGroupVisibility = (groupId) => {
+    setHiddenGroups(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
+  };
 
   // Compute usage metrics
   const palletSurfaceArea = palletL * palletW;
@@ -220,6 +246,8 @@ window.CartonApp.Components.PalletView3D = function ({
       // MULTI-GROUP DRAWING
       // ---------------------------
       multiTile.groups.forEach((group) => {
+        // Skip hidden groups
+        if (hiddenGroups[group.id]) return;
         if (!group.placements || !group.placements.length) return;
 
         const mat = new THREE.MeshLambertMaterial({
@@ -423,6 +451,7 @@ window.CartonApp.Components.PalletView3D = function ({
     effectiveCartons,
     isMulti,
     multiTile,
+    hiddenGroups,
   ]);
 
   const displayLayers = isMulti ? (multiTile.totalLayers || 0) : layers;
@@ -450,7 +479,7 @@ window.CartonApp.Components.PalletView3D = function ({
             onClick: () => setViewMode("2D"),
             className: `px-3 py-1 text-sm rounded-lg transition-colors ${
               viewMode === "2D"
-                ? "bg-blue-500 text-white"
+                ? "bg-teal-500 text-white"
                 : "bg-gray-100 hover:bg-gray-200"
             }`,
           },
@@ -462,7 +491,7 @@ window.CartonApp.Components.PalletView3D = function ({
             onClick: () => setViewMode("3D"),
             className: `px-3 py-1 text-sm rounded-lg transition-colors ${
               viewMode === "3D"
-                ? "bg-blue-500 text-white"
+                ? "bg-teal-500 text-white"
                 : "bg-gray-100 hover:bg-gray-200"
             }`,
           },
@@ -471,10 +500,82 @@ window.CartonApp.Components.PalletView3D = function ({
       )
     ),
 
+    // Container Navigation (only show if multiple containers)
+    totalContainers > 1 && React.createElement(
+      "div",
+      { className: "flex items-center justify-center gap-3 mb-3 py-2 bg-gray-50 rounded-lg" },
+      React.createElement(
+        "button",
+        {
+          onClick: () => onContainerChange(activeContainerIndex - 1),
+          disabled: activeContainerIndex === 0,
+          className: `px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+            activeContainerIndex === 0
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : "bg-teal-500 text-white hover:bg-teal-600"
+          }`,
+        },
+        "← Previous"
+      ),
+      React.createElement(
+        "span",
+        { className: "text-sm font-medium text-gray-700 min-w-[140px] text-center" },
+        `Container ${activeContainerIndex + 1} of ${totalContainers}`
+      ),
+      React.createElement(
+        "button",
+        {
+          onClick: () => onContainerChange(activeContainerIndex + 1),
+          disabled: activeContainerIndex === totalContainers - 1,
+          className: `px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+            activeContainerIndex === totalContainers - 1
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : "bg-teal-500 text-white hover:bg-teal-600"
+          }`,
+        },
+        "Next →"
+      )
+    ),
+
     viewMode === "3D"
       ? React.createElement(
           React.Fragment,
           null,
+          // Group visibility toggles (only for multi-group mode)
+          isMulti && groupList.length > 0 && React.createElement(
+            "div",
+            { className: "flex flex-wrap gap-2 mb-3 p-2 bg-gray-50 rounded-lg" },
+            React.createElement("span", { className: "text-xs text-gray-500 mr-2 self-center" }, "Show/Hide:"),
+            ...groupList.map(group =>
+              React.createElement(
+                "button",
+                {
+                  key: group.id,
+                  onClick: () => toggleGroupVisibility(group.id),
+                  className: `flex items-center gap-2 px-3 py-1 text-xs rounded-lg transition-all border ${
+                    hiddenGroups[group.id]
+                      ? "bg-gray-200 text-gray-500 border-gray-300"
+                      : "bg-white text-gray-700 border-gray-300 shadow-sm"
+                  }`,
+                  title: hiddenGroups[group.id] ? `Show ${group.id}` : `Hide ${group.id}`
+                },
+                React.createElement("span", {
+                  className: "w-3 h-3 rounded-sm",
+                  style: {
+                    backgroundColor: hiddenGroups[group.id]
+                      ? "#d1d5db"
+                      : (typeof group.color === "number"
+                          ? `#${group.color.toString(16).padStart(6, '0')}`
+                          : group.color),
+                    opacity: hiddenGroups[group.id] ? 0.5 : 1
+                  }
+                }),
+                React.createElement("span", null, group.name),
+                React.createElement("span", { className: "text-gray-400" }, `(${group.count})`),
+                React.createElement("span", { className: "ml-1" }, hiddenGroups[group.id] ? "👁️‍🗨️" : "👁️")
+              )
+            )
+          ),
           React.createElement("div", {
             ref: mountRef,
             className: "bg-gray-50 rounded-xl overflow-hidden",
@@ -509,23 +610,21 @@ window.CartonApp.Components.PalletView3D = function ({
     // Stats summary
     React.createElement(
       "div",
-      { className: "grid grid-cols-2 gap-2 text-sm mt-2" },
+      { className: "grid grid-cols-2 gap-2 text-sm mt-4" },
       React.createElement(
         "div",
         { className: "grid grid-cols-2 gap-2" },
-        React.createElement(
+         React.createElement(
           "div",
           null,
-          React.createElement("span", { className: "text-gray-500" }, "Layers:"),
+          React.createElement("span", { className: "text-gray-500" }, "Volume usage:"),
           " ",
-          isMulti ? "multi" : displayLayers
-        ),
-        React.createElement(
-          "div",
-          null,
-          React.createElement("span", { className: "text-gray-500" }, "Cartons/layer:"),
-          " ",
-          displayCartonsPerLayer
+          volumeUsage.toFixed(1),
+          "% (",
+          (cartonsVolume / 1000000000).toFixed(2),
+          " m³ / ",
+          (palletVolume / 1000000000).toFixed(2),
+          " m³)"
         ),
         React.createElement(
           "div",
@@ -540,8 +639,16 @@ window.CartonApp.Components.PalletView3D = function ({
           React.createElement("span", { className: "text-gray-500" }, "Total weight:"),
           " ",
           (displayTotalCartons * cartonWeight).toFixed(1),
-          " kg"
-        )
+          " kg",
+          palletGrossMax ? ` (max: ${palletGrossMax.toFixed(0)} kg)` : ""
+        ),
+                React.createElement(
+          "div",
+          null,
+          React.createElement("span", { className: "text-gray-500" }, "Stack height:"),
+          " ",
+          isMulti ? "varies" : `${stackHeight} mm`
+        ),
       ),
       React.createElement(
         "div",
@@ -554,30 +661,14 @@ window.CartonApp.Components.PalletView3D = function ({
           surfaceUsage.toFixed(1),
           "%"
         ),
-        React.createElement(
+             React.createElement(
           "div",
           null,
-          React.createElement("span", { className: "text-gray-500" }, "Volume usage:"),
+          React.createElement("span", { className: "text-gray-500" }, "Layers:"),
           " ",
-          volumeUsage.toFixed(1),
-          "%"
+          isMulti ? "multi" : displayLayers
         ),
-        React.createElement(
-          "div",
-          null,
-          React.createElement("span", { className: "text-gray-500" }, "Stack height:"),
-          " ",
-          isMulti ? "varies" : `${stackHeight} mm`
-        ),
-        React.createElement(
-          "div",
-          null,
-          React.createElement("span", { className: "text-gray-500" }, "Height unused:"),
-          " ",
-          isMulti || heightUnused == null
-            ? "—"
-            : `${heightUnused} mm`
-        )
+       
       )
     )
   );

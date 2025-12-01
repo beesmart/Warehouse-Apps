@@ -59,7 +59,7 @@ window.CartonApp.Components.PalletSizeSelector = function({ limits, setLimits })
   
   return React.createElement(
     'section',
-    { className: 'p-4 border rounded-2xl shadow-sm bg-white' },
+    { className: 'p-4 border rounded-2xl shadow-sm bg-white', style: { display: 'none'} },
     
     React.createElement('h3', { className: 'font-semibold mb-2' }, 'Containers'),
 
@@ -126,7 +126,51 @@ window.CartonApp.Components.PalletSizeSelector = function({ limits, setLimits })
 
 
 // Optimization Details Component
-window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits, palletLayers, cartonsPerPallet, carton }) {
+window.CartonApp.Components.OptimizationDetails = function({
+  palletTile,
+  limits,
+  palletLayers,
+  cartonsPerPallet,
+  carton,
+  multiPack,
+  isMultiActive
+}) {
+  // Multi-group mode - show packing statistics
+  if (isMultiActive && multiPack) {
+    const totalCartons = multiPack.totalCartons || 0;
+    const totalLayers = multiPack.totalLayers || 0;
+    const maxHeight = multiPack.maxHeight || 0;
+    const usedVolume = multiPack.totalVolume || 0;
+    const containerVolume = limits.palletL * limits.palletW * limits.palletH;
+    const volumeEfficiency = containerVolume > 0 ? ((usedVolume / containerVolume) * 100).toFixed(1) : "0";
+
+    const surfaceArea = limits.palletL * limits.palletW;
+    const usedSurface = (multiPack.usedL || 0) * (multiPack.usedW || 0);
+    const surfaceEfficiency = surfaceArea > 0 ? ((usedSurface / surfaceArea) * 100).toFixed(1) : "0";
+
+    return React.createElement(
+      "section",
+      { className: "p-4 border rounded-2xl shadow-sm bg-white" },
+      React.createElement("h4", { className: "font-semibold mb-2" }, "Container Packing Summary"),
+      React.createElement(
+        "div",
+        { className: "text-sm" },
+        React.createElement("h5", { className: "font-medium text-gray-700 mb-1" }, "Multi-Group Configuration"),
+        React.createElement(
+          "ul",
+          { className: "list-disc text-gray-600 pl-5 space-y-0.5" },
+          React.createElement("li", null, `Total cartons packed: ${totalCartons}`),
+          React.createElement("li", null, `Carton groups: ${multiPack.groups ? multiPack.groups.filter(g => g.placedQty > 0).length : 0}`),
+          React.createElement("li", null, `Volume efficiency: ${volumeEfficiency}%`),
+          React.createElement("li", null, `Surface efficiency: ${surfaceEfficiency}%`),
+          React.createElement("li", null, `Stack height: ${maxHeight.toFixed(0)} mm of ${limits.palletH} mm`),
+          React.createElement("li", null, `Height utilization: ${limits.palletH > 0 ? ((maxHeight / limits.palletH) * 100).toFixed(1) : 0}%`)
+        )
+      )
+    );
+  }
+
+  // Single-carton mode - show pattern-based statistics
   const layoutType = palletTile.pattern?.startsWith("mixed")
     ? "Mixed (alternating rows)"
     : "Uniform (consistent rows)";
@@ -139,14 +183,17 @@ window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits,
         ).toFixed(1)
       : "0";
 
+  const stackHeight = palletLayers * palletTile.boxH;
+  const heightUtilization = limits.palletH > 0 ? ((stackHeight / limits.palletH) * 100).toFixed(1) : "0";
+
   return React.createElement(
     "section",
     { className: "p-4 border rounded-2xl shadow-sm bg-white" },
-    React.createElement("h4", { className: "font-semibold mb-2" }, "Optimization Details"),
+    React.createElement("h4", { className: "font-semibold mb-2" }, "Container Packing Summary"),
     React.createElement(
       "div",
       { className: "text-sm" },
-      React.createElement("h5", { className: "font-medium text-gray-700 mb-1" }, "Container Configuration"),
+      React.createElement("h5", { className: "font-medium text-gray-700 mb-1" }, "Single-Carton Configuration"),
       React.createElement(
         "ul",
         { className: "list-disc text-gray-600 pl-5 space-y-0.5" },
@@ -166,11 +213,10 @@ window.CartonApp.Components.OptimizationDetails = function({ palletTile, limits,
           )
         ),
         React.createElement("li", null, `Cartons per layer: ${palletTile.perLayer}`),
-        React.createElement("li", null, `Pallet orientation: ${palletTile.palletSwapped ? "Swapped (1200×1000 used)" : "Original (1000×1200)"}`),
-        React.createElement("li", null, `Space efficiency: ${spaceEfficiency}%`),
         React.createElement("li", null, `Vertical layers: ${palletLayers}`),
-        React.createElement("li", null, `Stack height: ${palletLayers * palletTile.boxH} mm`),
-        React.createElement("li", null, `Total inners on pallet: ${cartonsPerPallet * (carton.innersPerCarton || 0)}`)
+        React.createElement("li", null, `Surface efficiency: ${spaceEfficiency}%`),
+        React.createElement("li", null, `Stack height: ${stackHeight} mm of ${limits.palletH} mm`),
+        React.createElement("li", null, `Height utilization: ${heightUtilization}%`)
       )
     )
   );
@@ -185,10 +231,9 @@ window.CartonApp.Components.NotesAndTips = function() {
     React.createElement(
       "ul",
       { className: "list-disc pl-5 text-sm text-gray-700 space-y-1" },
-      React.createElement("li", null, "3D view shows actual carton stacking on pallet – click and drag to rotate view."),
+      React.createElement("li", null, "3D view shows actual stacking on container – click and drag to rotate view."),
       React.createElement("li", null, "Toggle between 2D and 3D views using the buttons above the visualization."),
       React.createElement("li", null, "Automatically tests all orientations based on your settings."),
-      React.createElement("li", null, "Yellow boxes in 2D view indicate rotated cartons (90° rotation)."),
       React.createElement("li", null, "All calculations use integer tiling (floor function)."),
       React.createElement("li", null, "Red warnings indicate weight limit violations.")
     )
