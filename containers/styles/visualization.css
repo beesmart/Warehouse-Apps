@@ -1,0 +1,388 @@
+/* Visualization Styles - 3D and 2D view components */
+
+/* Visualization Panel */
+.visualization-panel {
+    background: var(--card-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: fadeInRight 0.6s ease-out 0.4s both;
+}
+
+/* View Tabs */
+.view-tabs {
+    display: flex;
+    background: var(--dark-surface);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.view-tab {
+    flex: 1;
+    padding: var(--spacing-md);
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-family: var(--font-display);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    position: relative;
+}
+
+.view-tab:hover {
+    color: var(--text-primary);
+    background: rgba(0, 212, 255, 0.05);
+}
+
+.view-tab.active {
+    color: var(--primary-blue);
+    background: var(--card-surface);
+}
+
+.view-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-blue), var(--accent-green));
+}
+
+/* View Container */
+.view-container {
+    flex: 1;
+    min-height: 500px;
+    position: relative;
+    background: var(--dark-surface);
+}
+
+.view-content {
+    display: none;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.view-content.active {
+    display: block;
+}
+
+/* 3D Canvas */
+#canvas-3d {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* 2D SVG */
+#svg-2d {
+    width: 100%;
+    height: 100%;
+    background: var(--dark-surface);
+}
+
+/* Metrics View */
+#view-metrics {
+    padding: var(--spacing-xl);
+    overflow-y: auto;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+/* Metrics Dashboard */
+.metrics-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    background: var(--dark-surface);
+    border-top: 1px solid var(--border-color);
+}
+
+.metric-card {
+    text-align: center;
+    padding: var(--spacing-md);
+    background: var(--card-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    transition: var(--transition-fast);
+}
+
+.metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-blue), var(--accent-green));
+    opacity: 0.6;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 212, 255, 0.2);
+}
+
+.metric-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: var(--spacing-sm);
+}
+
+.metric-value {
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: var(--primary-blue);
+    text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+}
+
+.metric-unit {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-left: var(--spacing-xs);
+}
+
+/* Metric Card States */
+.metric-card.warning .metric-value {
+    color: var(--warning-orange);
+    text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+}
+
+.metric-card.danger .metric-value {
+    color: var(--danger-red);
+    text-shadow: 0 0 20px rgba(255, 51, 102, 0.5);
+}
+
+.metric-card.success .metric-value {
+    color: var(--success-green);
+    text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+}
+
+/* 3D Scene Controls */
+.scene-controls {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    display: flex;
+    gap: var(--spacing-sm);
+    z-index: 10;
+}
+
+.scene-control-btn {
+    padding: var(--spacing-sm);
+    background: var(--card-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition-fast);
+    font-size: 1.2rem;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.scene-control-btn:hover {
+    background: var(--dark-surface);
+    border-color: var(--primary-blue);
+    color: var(--primary-blue);
+}
+
+/* 2D SVG Elements */
+.container-outline {
+    fill: none;
+    stroke: var(--primary-blue);
+    stroke-width: 2;
+    stroke-dasharray: 5, 5;
+    opacity: 0.6;
+}
+
+.cargo-box {
+    stroke-width: 1;
+    fill-opacity: 0.7;
+    transition: var(--transition-fast);
+    cursor: pointer;
+}
+
+.cargo-box:hover {
+    fill-opacity: 0.9;
+    filter: drop-shadow(0 0 10px currentColor);
+}
+
+/* Stacking indicators in 2D view */
+.cargo-box.has-stack-above {
+    stroke-width: 2;
+    stroke-dasharray: 2, 2;
+    animation: pulse-stroke 2s infinite;
+}
+
+.cargo-box.bottom-of-stack {
+    fill-opacity: 0.95;
+}
+
+.cargo-box.middle-of-stack {
+    fill-opacity: 0.85;
+}
+
+.cargo-box.top-of-stack {
+    fill-opacity: 0.6;
+}
+
+@keyframes pulse-stroke {
+    0%, 100% {
+        stroke-opacity: 1;
+    }
+    50% {
+        stroke-opacity: 0.5;
+    }
+}
+
+.stack-badge {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.dimension-label {
+    fill: var(--text-secondary);
+    font-size: 12px;
+    font-family: var(--font-mono);
+}
+
+.dimension-arrow {
+    stroke: var(--text-secondary);
+    stroke-width: 1;
+    marker-end: url(#arrowhead);
+}
+
+/* Layer Controls for 2D View */
+.layer-controls {
+    position: absolute;
+    bottom: var(--spacing-md);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    background: var(--card-surface);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.layer-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.layer-nav-btn {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--dark-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.layer-nav-btn:hover:not(:disabled) {
+    background: var(--card-surface);
+    border-color: var(--primary-blue);
+    color: var(--primary-blue);
+}
+
+.layer-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Detailed Metrics View */
+.detailed-metric {
+    background: var(--card-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: var(--spacing-lg);
+}
+
+.detailed-metric-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detailed-metric-title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.detailed-metric-value {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: var(--primary-blue);
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: var(--dark-surface);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-blue), var(--accent-green));
+    transition: width 0.6s ease-out;
+    position: relative;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
