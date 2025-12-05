@@ -4,9 +4,9 @@
 window.CartonApp = window.CartonApp || {};
 
 window.CartonApp.MainApp = function () {
-  const { useState, useMemo } = React;
+  const { useState, useMemo, useEffect } = React;
   const { DEFAULT_VALUES, PALLET_SIZES } = window.CartonApp.Constants;
-  const { handleNumberInput, numberFmt } = window.CartonApp.Utils;
+  const { handleNumberInput, numberFmt, parseUrlParams, updateUrlParams } = window.CartonApp.Utils;
   const { bestTile } = window.CartonApp.Algorithms;
   const {
     InputSection,
@@ -18,15 +18,42 @@ window.CartonApp.MainApp = function () {
   } = window.CartonApp.Components;
 
   // -------------------------------------------------
+  // Initialize state from URL params or defaults
+  // -------------------------------------------------
+  const getInitialState = () => {
+    const urlParams = parseUrlParams();
+
+    const cartonInit = urlParams.carton
+      ? { ...DEFAULT_VALUES.carton, ...urlParams.carton }
+      : { ...DEFAULT_VALUES.carton, weight: 10.0 };
+
+    const limitsInit = urlParams.pallet
+      ? {
+          ...DEFAULT_VALUES.limits,
+          palletL: urlParams.pallet.L,
+          palletW: urlParams.pallet.W,
+          palletH: urlParams.pallet.H,
+        }
+      : DEFAULT_VALUES.limits;
+
+    return { cartonInit, limitsInit };
+  };
+
+  const { cartonInit, limitsInit } = getInitialState();
+
+  // -------------------------------------------------
   // STATE
   // -------------------------------------------------
-  const [carton, setCarton] = useState({
-    ...DEFAULT_VALUES.carton,
-    weight: 10.0, // moved from product
-  });
-
-  const [limits, setLimits] = useState(DEFAULT_VALUES.limits);
+  const [carton, setCarton] = useState(cartonInit);
+  const [limits, setLimits] = useState(limitsInit);
   const [allowVerticalFlip, setAllowVerticalFlip] = useState(true);
+
+  // -------------------------------------------------
+  // Update URL when carton or limits change
+  // -------------------------------------------------
+  useEffect(() => {
+    updateUrlParams(carton, limits);
+  }, [carton.l, carton.w, carton.h, limits.palletL, limits.palletW, limits.palletH]);
 
   // -------------------------------------------------
   // COMPUTATIONS
@@ -87,7 +114,7 @@ window.CartonApp.MainApp = function () {
           // Nav Links
           React.createElement(
             "div",
-            { className: "flex items-center gap-1" },
+            { className: "flex items-center gap-2" },
             React.createElement(
               "a",
               {
@@ -103,7 +130,13 @@ window.CartonApp.MainApp = function () {
                 className: "px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
               },
               "Containers"
-            )
+            ),
+            // Divider
+            React.createElement("div", {
+              className: "h-6 w-px bg-gray-500 mr-4"
+            }),
+            // Report Problem button
+            React.createElement(window.CartonApp.Components.ReportProblem)
           )
         )
       )

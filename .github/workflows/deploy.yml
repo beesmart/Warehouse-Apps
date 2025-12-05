@@ -25,8 +25,18 @@ jobs:
           rsync -avz --delete \
             --exclude='.git*' \
             --exclude='.github' \
+            --exclude='api/config.php' \
             ./ \
             ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/carton-planner
+
+      - name: 🔑 Write Mailgun config
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} "cat > /var/www/carton-planner/api/config.php << 'EOFCONFIG'
+          <?php
+          define('MAILGUN_API_KEY', '${{ secrets.MAILGUN_API_KEY }}');
+          define('MAILGUN_DOMAIN', 'mg.e-bedding.co.uk');
+          define('MAILGUN_TO_EMAIL', 'stephen.collins@comfygroup.co.uk');
+          EOFCONFIG"
 
       - name: 🔄 Restart Nginx
         run: |
