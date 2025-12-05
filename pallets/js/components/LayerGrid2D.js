@@ -52,19 +52,24 @@ window.CartonApp.Components.LayerGrid2D = function ({
   usedL,
   usedW,
   patternRows,
+  boxPositions,
   pattern,
 }) {
 
     // 🧩 Prevent invalid render states when pallet dimensions are empty or invalid
+  // Allow boxPositions to bypass countL/countW validation since pinwheel doesn't use them
+  const hasBoxPositions = boxPositions && Array.isArray(boxPositions) && boxPositions.length > 0;
   if (
     !Number.isFinite(spaceL) ||
     !Number.isFinite(spaceW) ||
     !Number.isFinite(boxL) ||
     !Number.isFinite(boxW) ||
-    !Number.isFinite(countL) ||
-    !Number.isFinite(countW) ||
-    countL <= 0 ||
-    countW <= 0
+    (!hasBoxPositions && (
+      !Number.isFinite(countL) ||
+      !Number.isFinite(countW) ||
+      countL <= 0 ||
+      countW <= 0
+    ))
   ) {
     return React.createElement(
       "div",
@@ -211,48 +216,55 @@ window.CartonApp.Components.LayerGrid2D = function ({
           strokeDasharray: "6 6",
         }),
 
-        // Draw cartons (patterned or uniform)
-        // Draw cartons (patterned or uniform)
-        patternRows && Array.isArray(patternRows) && patternRows.length > 0
-          ? patternRows.flatMap((row, rowIndex) => {
-              const { rotated, countL, boxL: rowBoxL, boxW: rowBoxW } = row || {};
-
-              // Skip invalid rows
-              if (
-                !Number.isFinite(countL) ||
-                !Number.isFinite(rowBoxL) ||
-                !Number.isFinite(rowBoxW) ||
-                countL <= 0
-              ) {
-                return [];
-              }
-
-              const y = yOffset * scale;
-              yOffset += rowBoxW;
-
-              return Array.from({ length: Math.max(0, Math.floor(countL)) }).map((_, i) => {
-                const x = i * rowBoxL * scale;
-                return renderBox(
-                  x,
-                  y,
-                  rowBoxL * scale,
-                  rowBoxW * scale,
-                  rotated,
-                  rowIndex,
-                  i
-                );
-              });
+        // Draw cartons (pinwheel, patterned rows, or uniform grid)
+        hasBoxPositions
+          ? boxPositions.map((pos, idx) => {
+              const x = pos.x * scale;
+              const y = pos.z * scale;
+              const width = pos.l * scale;
+              const height = pos.w * scale;
+              return renderBox(x, y, width, height, pos.rotated, 0, idx);
             })
-          : (Number.isFinite(countL) && Number.isFinite(countW) && countL > 0 && countW > 0
-              ? Array.from({ length: Math.floor(countL) }).flatMap((_, i) =>
-                  Array.from({ length: Math.floor(countW) }).map((_, j) => {
-                    const x = i * boxL * scale;
-                    const y = j * boxW * scale;
-                    return renderBox(x, y, boxL * scale, boxW * scale, false, i, j);
-                  })
-                )
-              : []
-            )
+          : patternRows && Array.isArray(patternRows) && patternRows.length > 0
+            ? patternRows.flatMap((row, rowIndex) => {
+                const { rotated, countL, boxL: rowBoxL, boxW: rowBoxW } = row || {};
+
+                // Skip invalid rows
+                if (
+                  !Number.isFinite(countL) ||
+                  !Number.isFinite(rowBoxL) ||
+                  !Number.isFinite(rowBoxW) ||
+                  countL <= 0
+                ) {
+                  return [];
+                }
+
+                const y = yOffset * scale;
+                yOffset += rowBoxW;
+
+                return Array.from({ length: Math.max(0, Math.floor(countL)) }).map((_, i) => {
+                  const x = i * rowBoxL * scale;
+                  return renderBox(
+                    x,
+                    y,
+                    rowBoxL * scale,
+                    rowBoxW * scale,
+                    rotated,
+                    rowIndex,
+                    i
+                  );
+                });
+              })
+            : (Number.isFinite(countL) && Number.isFinite(countW) && countL > 0 && countW > 0
+                ? Array.from({ length: Math.floor(countL) }).flatMap((_, i) =>
+                    Array.from({ length: Math.floor(countW) }).map((_, j) => {
+                      const x = i * boxL * scale;
+                      const y = j * boxW * scale;
+                      return renderBox(x, y, boxL * scale, boxW * scale, false, i, j);
+                    })
+                  )
+                : []
+              )
       ),
     ),
 

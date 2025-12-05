@@ -248,15 +248,37 @@ window.CartonApp.Components.PalletView3D = function ({
     });
 
     // Add cartons
+    const boxPositions = palletTile.boxPositions;
     for (let layer = 0; layer < layers; layer++) {
       const yOffset = 100 + layer * cartonH + cartonH / 2;
-      if (patternRows) {
+      if (boxPositions) {
+        // Pinwheel pattern: render each box at its specific position
+        boxPositions.forEach((pos) => {
+          const carton = new THREE.Mesh(
+            cartonGeometry,
+            pos.rotated ? rotatedMaterial : standardMaterial
+          );
+          const edges = new THREE.LineSegments(cartonEdges, edgeMaterial);
+          // Convert from corner-based (x,z) to center-based positioning
+          // pos.x, pos.z are from corner (0,0), need to offset to center on pallet
+          const xPos = -drawL / 2 + pos.x + pos.l / 2;
+          const zPos = -drawW / 2 + pos.z + pos.w / 2;
+          carton.scale.set(pos.l, cartonH, pos.w);
+          edges.scale.set(pos.l, cartonH, pos.w);
+          carton.position.set(xPos, yOffset, zPos);
+          edges.position.set(xPos, yOffset, zPos);
+          carton.castShadow = true;
+          carton.receiveShadow = true;
+          scene.add(carton);
+          scene.add(edges);
+        });
+      } else if (patternRows) {
         let zStart = -drawW / 2;
         patternRows.forEach((row) => {
           const { rotated, countL, boxL: rowBoxL, boxW: rowBoxW } = row;
           const rowUsedL = countL * rowBoxL;
           const xStart = -rowUsedL / 2;
-          
+
           for (let i = 0; i < countL; i++) {
             const carton = new THREE.Mesh(
               cartonGeometry,
@@ -427,6 +449,7 @@ window.CartonApp.Components.PalletView3D = function ({
           usedL: Math.floor(palletL / cartonL) * cartonL,
           usedW: Math.floor(palletW / cartonW) * cartonW,
           patternRows: patternRows,
+          boxPositions: palletTile.boxPositions,
           pattern: palletTile.pattern,
         }),
 
